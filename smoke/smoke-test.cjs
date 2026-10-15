@@ -1679,12 +1679,20 @@ function makeAudioCapture() {
 // The bundle plays a picked file through a bare `Audio`, i.e. the sandbox
 // global rather than window.Audio.
 function makeAudioElementCapture() {
-  const played = [];
-  class FakeAudio {
-    constructor(src) { this.src = src; this.volume = 1; }
-    play() { played.push(this); return Promise.resolve(); }
-  }
-  return { FakeAudio, played };
+  const cap = {
+    played: [],
+    // When flipped, play() rejects the way a decode failure or the browser's
+    // autoplay refusal does — asynchronously, not by throwing.
+    failPlay: false,
+    FakeAudio: class {
+      constructor(src) { this.src = src; this.volume = 1; }
+      play() {
+        cap.played.push(this);
+        return cap.failPlay ? Promise.reject(new Error('decode refused')) : Promise.resolve();
+      }
+    },
+  };
+  return cap;
 }
 
 const PICKED_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YQAAAAA=';
@@ -1763,6 +1771,19 @@ async function soundSources() {
   api.test('done');
   assert(el.played.length === 0, 'no file left to play');
   assert(audio.freqs().join(',') === '659,988', 'a missing file falls back to the built-in cue, got ' + audio.freqs().join(','));
+
+  // 4b) A stored file the browser refuses to play must not go silent either:
+  //     the refusal rejects play()'s promise asynchronously, and the built-in
+  //     cue takes over when it does.
+  store.setItem('dshNotifyMe.sound.done', JSON.stringify({ name: 'x.wav', size: 3, data: PICKED_WAV }));
+  audio.tones.length = 0;
+  el.played.length = 0;
+  el.failPlay = true;
+  api.test('done');
+  assert(el.played.length === 1, 'the picked file was attempted');
+  await new Promise((r) => setTimeout(r, 0));
+  assert(audio.freqs().join(',') === '659,988', 'a refused play() falls back to the built-in cue, got ' + audio.freqs().join(','));
+  el.failPlay = false;
 
   // 5) reset drops the picked audio too: the records live outside the config,
   //    so clearing the config alone would orphan them in the origin quota.

@@ -2,7 +2,7 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
-## [1.6.0] — 2026-10-09
+## [1.6.0] — 2026-10-15
 
 ### 新增
 - **设置页可选音效来源**（`soundDone` / `soundAttention`，「需要你」与「回复完成」各自独立）：
@@ -24,7 +24,7 @@ All notable changes to **dsh-notify-me** are documented here.
 - **「系统通知音」模式下点「试听」不再静默无反应**：该模式本就没有插件可播的音（声音是随通知由系统播放的），而初版实现让试听照样走插件音效通道、在 `'system'` 分支直接返回，按钮看起来就是坏的。现在改为按该类别**发一条测试通知**——你听到的就是它，并在按钮下方写明原因；`sound` 总开关关闭时同样给一句说明而不是静默。
 
 ### 测试
-- `smoke/smoke-test.cjs` 新增音效来源用例段（**此前音效路径零覆盖**——harness 的 `AudioContext` 是 `undefined`，所有既有用例都静默走了「无音频」分支）：注入可捕获的 `AudioContext` 后，覆盖内置合成音的两种音型（done `659,988`、attention `880,1174,1568`）、`'system'` 不产生振荡器且通知 `silent === false`、`sound: false` 在 `'system'` 模式下重新静音、`'custom'` 播放所存 data URL 且音量跟随滑块、两类来源互不影响、文件缺失时回落内置音、`resetConfig()` 清空两个音频键。
+- `smoke/smoke-test.cjs` 新增音效来源用例段（**此前音效路径零覆盖**——harness 的 `AudioContext` 是 `undefined`，所有既有用例都静默走了「无音频」分支）：注入可捕获的 `AudioContext` 后，覆盖内置合成音的两种音型（done `659,988`、attention `880,1174,1568`）、`'system'` 不产生振荡器且通知 `silent === false`、`sound: false` 在 `'system'` 模式下重新静音、`'custom'` 播放所存 data URL 且音量跟随滑块、两类来源互不影响、文件缺失或浏览器拒绝播放（`play()` 异步拒绝）时回落内置音、`resetConfig()` 清空两个音频键。
 - 同一文件新增设置页渲染用例：`bootBundle` 支持注入 `require`（此前固定返回 `{}`，设置页永不注册、无法被测试），用例断言 `settings.section` 注册成功、「音效来源」两张卡片渲染、`custom` 时才出现文件选择行并显示文件名与体积，以及**按下 `'system'` 行的「试听」确实发出一条 `silent === false` 的测试通知**（为此假 React 改为按索引跨渲染保持 hook 状态，能读到点击后的反馈文案）；默认路径（不注入 react）行为不变。
 - `npm test` 两套件均通过；`smoke/cordis-host-test.mjs` 用 `DSH_NODE_MODULES` 指向本机 DSH 安装后**真跑**（此前在多数机器上静默 SKIP），真 cordis 下的 `inject` 语义守卫一并复核通过。
 

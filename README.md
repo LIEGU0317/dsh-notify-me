@@ -12,7 +12,9 @@
 
 ---
 
-**离开 DSH 页面也不错过任何动静。** 当模型停下来需要你操作（审批 / 方案待确认 / 提问）、或你在别的软件时回复正好在后台完成，dsh-notify-me 会用系统通知 + 提示音 + 标签页标题标记提醒你——权限审批的通知还带「同意 / 拒绝」按钮，点一下就完成裁决，不用切回页面。开关和通知语言都直接在 **DSH 设置 → 通知提醒** 里改。
+**离开 DSH 页面，也能及时知道何时需要回来。** dsh-notify-me 支持 DSH Web 与 DSH Desktop：当模型停下来需要你操作（审批 / 方案待确认 / 提问），或回复在后台完成时，用系统通知 + 提示音 + 标题标记提醒你。在支持 Service Worker 的 Web 环境，权限审批通知还提供「同意 / 拒绝」按钮；桌面端使用无按钮通知，点通知正文可回到对应对话。开关和通知语言都在 **DSH 设置 → 通知提醒** 里改。
+
+> DSH 页面或桌面应用必须保持运行，后台 / 最小化可以；关闭页面或退出应用后不再提醒。系统通知需要通知权限；Web 端审批按钮还要求 `http://127.0.0.1` 或 `https` 等支持 Service Worker 的环境。
 
 ---
 
@@ -39,11 +41,51 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 [更新日志](CHANGELOG.md)
 
+## 安装
+
+### DSH Web
+
+已安装 DSH CLI 的用户，在终端执行：
+
+```powershell
+# 安装并自动挂载进 web profile
+dsh plugin --profile web add dsh-notify-me
+```
+
+重启 `dsh web`，然后硬刷新页面（Ctrl+Shift+R）。如果你使用其他 Web profile，请把命令中的 `web` 换成实际名称。
+
+### DSH Desktop
+
+1. 在桌面应用打开 **插件 → 添加插件**。
+2. 输入 npm 包名 `dsh-notify-me`，按应用提示完成安装，并确认插件已启用。
+3. 完全退出并重新启动 DSH Desktop，使插件加载。
+
+桌面端的 `desktop` profile 由 Electron 应用管理；不要把上面的 Web 命令改成 `--profile desktop`，CLI 会拒绝此操作。安装到 Web profile 也不会自动安装到桌面端。
+
+## 首次验证
+
+1. 在 DSH 页面上点击一次，按提示允许通知；若此前拒绝过，在浏览器站点设置中允许通知。操作系统也需要允许对应浏览器 / DSH Desktop 显示通知。
+2. 打开 **设置 → 通知提醒**，确认出现该分区及底部插件版本号，保持「启用提醒」「系统通知」「提示音」开启。
+3. 点击设置页的「测试『回复完成』」按钮：应出现一条测试通知，并按当前音效设置播放声音。这个本地测试不会转发到外部通知端点，也不受「页面打开时也提醒」开关限制。
+
+Web 用户可再测试审批按钮；桌面端该测试只发普通通知，**没有「同意 / 拒绝」按钮属于预期行为**。
+
+**控制台验证（可选）** — 支持 DevTools 的环境也可执行：
+
+```js
+window.__dshNotifyMe.test("done")        // 「完成」示例
+window.__dshNotifyMe.test("attention")   // 「需要你」示例
+window.__dshNotifyMe.test("approval")    // Web 桥可用时带「同意 / 拒绝」按钮；桌面端为无按钮通知
+window.__dshNotifyMe.debug()             // 桥接状态看 bridge 字段，active = 按钮可用
+```
+
+没有测试通知时，先检查：通知权限是否被拒绝（在页面上点一下 → 选「允许」；或地址栏锁 → 站点设置 → 通知 → 允许 → 刷新）、装完没重启 DSH、系统设置里浏览器通知被关。
+
 ## 提醒时机
 
 | 时机 | 提醒内容 | 默认 |
 | --- | --- | --- |
-| 🔔 **模型需要你操作** — 审批请求 / 方案待确认（plan review）/ 提问（`ask_user_question`） | 通知 + 提示音 + `🔔 需要你 ·` 标题标记；审批的通知上直接带「同意 / 拒绝」按钮 | 页面可见也提醒（当前对话除外：默认只留标题标记） |
+| 🔔 **模型需要你操作** — 审批请求 / 方案待确认（plan review）/ 提问（`ask_user_question`） | 通知 + 提示音 + `🔔 需要你 ·` 标题标记；支持快捷裁决的 Web 环境会带「同意 / 拒绝」按钮，桌面端无按钮 | 页面可见也提醒（当前对话除外：默认只留标题标记） |
 | ✅ **回复完成** — 一轮回复跑完；后台会话完成也会报 | 通知 + 提示音；后台会话**完成但还没看**的期间标题带 `✅ 回复完成 ·` 标记，打开该会话即撤 | 仅页面隐藏/后台时提醒（标题标记不受此限） |
 
 > **后台**子代理（subagent）子会话的等待与完成默认**不提醒**：DSH 把每个子代理子会话列成独立会话，但它们是所属主对话那一轮里的步骤，提醒只会是噪音。你当前打开的那个子代理会话不算在内，照常提醒。设置页「子代理会话不提醒」可关掉这个静音。
@@ -70,23 +112,16 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ## 提醒方式
 
-- **系统通知**：经浏览器弹出的系统通知，进 Windows 通知中心或 macOS 通知中心（点击回到提醒所属的对话；审批的通知点按钮直接裁决）
+- **系统通知**：经浏览器弹出的系统通知，进 Windows 通知中心或 macOS 通知中心（点击回到提醒所属的对话；支持快捷裁决的 Web 环境可点审批按钮直接裁决，桌面端无按钮）
 - **提示音**：默认是 WebAudio 合成音（「需要你」与「完成」使用不同音型）；可在设置里为两类提醒分别换成自定义音频文件，或改成让操作系统播放它自己的通知音
 - **标签页标题标记**：有待处理事项时，标题前出现 `🔔 需要你 · …` / `🔔 Action needed · …`；后台会话**完成但还没看**时出现 `✅ 回复完成 · …` / `✅ Reply finished · …`，打开对应会话（或它再次开跑）即消失。两种标记可同时出现，「需要你」在前；宿主改写标题后标记基于新标题重建
 - **外部通知**（可选，默认关）：按设置里配的推送目标，把同一条提醒转发到 Discord Webhook / Bark / Gotify / 自定义 Webhook——临时离开电脑时，手机上的推送渠道照样收到
 
 本插件是**浏览器层**实现：DSH 页面需保持打开（最小化/后台即可——那正是它监听的「离开」状态）。
 
-## 安装
+## 兼容性
 
-```powershell
-# DSH 官方插件命令：安装并自动挂载进 web profile
-dsh plugin --profile web add dsh-notify-me
-```
-
-重启 `dsh web` 后硬刷新页面（Ctrl+Shift+R）。
-
-**兼容性** — 插件按宿主代际自动选源，逐版本声明见 `package.json` 的 `dsh.compatibility.dshReleases`：
+插件按宿主代际自动选源，逐版本声明见 `package.json` 的 `dsh.compatibility.dshReleases`：
 
 | 宿主代际 | 「需要你」交互来源 | 判断当前会话 | 点通知切会话 |
 | --- | --- | --- | --- |
@@ -97,17 +132,6 @@ dsh plugin --profile web add dsh-notify-me
 区间仅作示意：插件按 store 形状自动选源（`sessionStatus` 存在即走新路），版本号只是各形状的出现边界。`package.json` 的 `peerDependencies` 范围同理只影响 npm install 的提示文案——兼容与否以 `dshReleases` 的逐版实测声明为准，未实测的新版本由形状驱动兜底。
 
 实测**真正激活**（各自独立 profile 启动：设置里出现「通知提醒」分区，即插件的 `apply` 确实执行）于 `0.1.2-rc.1`、`0.1.5-rc.2` 与 `0.2.0-rc.2`；更早的 `0.1.1-rc.2` 亦验证过。两个坑值得记住：一是 `dsh.client.inject` 里列了新版运行时已不再提供的包，客户端条目会停在 `pending (waiting for services: …)` 而永不执行——1.1.3 在 `0.1.2-rc.1` 及以后正是这样失效的；二是宿主换存储/字段名时**不会报错**，提醒只会静默失效——`0.2.0-rc.2` 上 `pendingInteractions`→`sessionStatus`、`list.current`→`retainedBy.mainView`、`sessions.open()`→`uiWorkspace.openSession()` 都是这一类，所以每次适配都要用 `window.__dshNotifyMe.debug()` 确认真的是 `bound`、以及用的是哪个来源。
-
-**验证** — F12 控制台执行：
-
-```js
-window.__dshNotifyMe.test("done")        // 「完成」示例
-window.__dshNotifyMe.test("attention")   // 「需要你」示例
-window.__dshNotifyMe.test("approval")    // 「审批按钮」示例：通知上有「同意 / 拒绝」，点着试试
-window.__dshNotifyMe.debug()             // 桥接状态看 bridge 字段，active = 按钮可用
-```
-
-没反应？九成是：通知权限被拒绝（在页面上点一下 → 选「允许」；或地址栏锁 → 站点设置 → 通知 → 允许 → 刷新）、装完没重启 DSH、系统设置里浏览器通知被关。
 
 ## 控制台高级配置
 
@@ -136,8 +160,10 @@ window.__dshNotifyMe.setConfig({
 })
 window.__dshNotifyMe.resetConfig()                // 恢复默认（同时清掉已选的自定义音效文件）
 window.__dshNotifyMe.decide("approval:3", "allowed-once")  // 程序化裁决："allowed-once" | "rejected"
-window.__dshNotifyMe.testExternal()               // 向所有推送目标发一条测试通知，返回 {sent, unverified, failed, statuses}
+window.__dshNotifyMe.testExternal()               // 显式外发测试：向有效目标发送，返回 {sent, unverified, failed, statuses}
 ```
+
+> **外部通知测试的开关边界**：设置页「发送测试通知」要求「启用提醒」与「外部通知」主开关开启，但忽略两类提醒的转发开关。控制台 `testExternal()` 是显式测试调用：只要配置了有效目标，即使上述主开关关闭，也会向这些目标发送测试消息；没有有效目标则不发送。普通的 `test("done")` / `test("attention")` / `test("approval")` 只测试本地提醒，不外发。
 
 > 自定义音效文件不在 `dshNotifyMe.config` 里，而是按类别各存一个键（`dshNotifyMe.sound.done` / `dshNotifyMe.sound.attention`，内容是 `{name, size, data}` 的 data URL）——一个文件转成 data URL 会膨胀约 1.37 倍，塞进配置会拖慢每次读取。`resetConfig()` 会连这两个键一起清掉。
 >

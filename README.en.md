@@ -12,7 +12,9 @@
 
 ---
 
-**Step away from the DeepSeek Harness web UI — and still know what's going on.** When the agent stops and needs your input, or when a reply finishes in the background while you're in another app, dsh-notify-me alerts you with a desktop notification, a sound, and a tab-title marker. Approval notifications even carry Approve / Reject buttons, so you can settle the request without switching back. Toggle it and pick the notification language right from **Settings → Notify me**.
+**Step away from DSH and know when to come back.** dsh-notify-me supports DSH Web and DSH Desktop: when the agent needs your input (approval / plan review / question), or a reply finishes in the background, it alerts you with a system notification, a sound, and a title marker. In a Service Worker capable Web environment, approval notifications also offer Approve / Reject buttons. Desktop uses buttonless notifications; clicking the body opens the corresponding conversation. Toggles and notification language live in **Settings → Notify me**.
+
+> Keep the DSH page or desktop application running; backgrounding / minimizing is fine, but closing the page or quitting the app stops alerts. System notifications require notification permission. Web approval buttons also need a Service Worker capable environment, such as `http://127.0.0.1` or `https`.
 
 ---
 
@@ -39,11 +41,55 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 
 [Changelog](CHANGELOG.md)
 
+## Installation
+
+### DSH Web
+
+With the DSH CLI already installed, run in a terminal:
+
+```powershell
+# Install and auto-mount into the web profile
+dsh plugin --profile web add dsh-notify-me
+```
+
+Restart `dsh web`, then hard-refresh the page (Ctrl+Shift+R). If you use another Web profile, replace `web` with its actual name.
+
+### DSH Desktop
+
+1. Open **Plugins → Add plugin** in the desktop application.
+2. Enter the npm package name `dsh-notify-me`, follow the installation prompts, and confirm that the plugin is enabled.
+3. Quit DSH Desktop completely and relaunch it so the plugin loads.
+
+The Electron application manages the `desktop` profile. Do not change the Web command above to `--profile desktop`: the CLI rejects that operation. Installing into the Web profile does not automatically install the plugin into Desktop.
+
+## First-use check
+
+1. Click once in the DSH page and allow notifications when prompted. If you previously declined, allow them in the browser's site settings. The operating system must also allow notifications from the browser / DSH Desktop.
+2. Open **Settings → Notify me**. Confirm that the section and plugin version at its foot appear, and leave the master switch, system notifications, and sound enabled.
+3. Click **Test "reply finished"** on the settings page. A test notification should appear and sound according to your cue settings. This local test does not forward to external endpoints and ignores the "while the page is open" toggle.
+
+Web users can also test approval buttons. On Desktop that test sends a plain notification: **no Approve / Reject buttons is the expected result**.
+
+**Optional console check** — in environments with DevTools, you can also run:
+
+```js
+window.__dshNotifyMe.test("done")        // "reply finished" sample
+window.__dshNotifyMe.test("attention")   // "needs your input" sample
+window.__dshNotifyMe.test("approval")    // Approve / Reject with an active Web bridge; buttonless on Desktop
+window.__dshNotifyMe.debug()             // the bridge field reports the button channel: "active" = buttons work
+```
+
+If no test notification appears, first check:
+
+- the notification permission was declined — click anywhere on the page and choose **Allow** (address-bar lock → Site settings → Notifications → Allow → reload);
+- the DSH process wasn't restarted after install;
+- your OS/browser notification settings block the browser's toasts.
+
 ## What it alerts about
 
 | When | What you get | Default |
 | --- | --- | --- |
-| 🔔 **The agent needs your input** — sandbox approval / plan review / a question (`ask_user_question`) | Toast + sound + `🔔 Action needed ·` title marker; approval toasts also carry Approve / Reject buttons | Alerts even while the page is visible (the conversation on screen is the exception: tab marker only by default) |
+| 🔔 **The agent needs your input** — sandbox approval / plan review / a question (`ask_user_question`) | Toast + sound + `🔔 Action needed ·` title marker; approval toasts carry Approve / Reject buttons on supported Web environments, and no buttons on Desktop | Alerts even while the page is visible (the conversation on screen is the exception: tab marker only by default) |
 | ✅ **A reply finishes** — a turn completes; background sessions finishing are also reported | Toast + sound; while a background session is **finished but unread** the tab title carries a `✅ Reply finished ·` marker, gone once you open that session | Alerts only while the page is hidden / backgrounded (the title marker is not gated by this) |
 
 > **Background** subagent child sessions are **not** alerted about by default: DSH lists each of them as its own session, but they are steps inside the parent conversation's turn, so an alert for them is only noise. The subagent session you have open is not part of this and alerts as usual. Settings → "Ignore subagent sessions" turns the mute off.
@@ -70,23 +116,16 @@ Open **Settings → Notify me** (refresh the page once after installing):
 
 ## How it alerts
 
-- **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; approval toasts can be decided straight from the buttons)
+- **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; supported Web environments offer approval buttons, Desktop does not)
 - **Sound** — WebAudio beeps by default (distinct patterns for "needs you" vs "done"); each kind can instead play a picked audio file, or hand the sound over to the operating system's own notification sound
 - **Tab title marker** — while something is waiting on you, the tab title is prefixed with `🔔 Action needed · …` / `🔔 需要你 · …`; while a background session is **finished but unread**, with `✅ Reply finished · …` / `✅ 回复完成 · …`, gone once you open that session (or it starts running again). Both kinds can be up together, "needs you" first; a host title change is rebased under the markers
 - **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / custom webhook — so the push channel on your phone picks it up while you step away from the machine
 
 This is a **browser-layer** plugin: the DSH page must stay open (minimized or backgrounded is fine — that's exactly the "away" state it watches for).
 
-## Installation
+## Compatibility
 
-```powershell
-# Official DSH plugin command — installs and auto-mounts into the web profile
-dsh plugin --profile web add dsh-notify-me
-```
-
-Restart `dsh web`, then hard-refresh the page (Ctrl+Shift+R).
-
-**Compatibility** — the plugin picks its interaction source per host generation; per-release declarations live in `package.json` under `dsh.compatibility.dshReleases`:
+The plugin picks its interaction source per host generation; per-release declarations live in `package.json` under `dsh.compatibility.dshReleases`:
 
 | Host generation | "Needs you" interaction source | Current session | Toast-click navigation |
 | --- | --- | --- | --- |
@@ -97,21 +136,6 @@ Restart `dsh web`, then hard-refresh the page (Ctrl+Shift+R).
 The ranges are illustrative: the plugin picks its source by store shape (whenever `sessionStatus` exists it takes the new path); the version numbers only mark where each shape appeared. The `peerDependencies` range in `package.json` likewise only shapes npm's install warning — compatibility is declared per release in `dshReleases` after real testing, and untested new versions fall back to shape-driven behaviour.
 
 Verified to actually activate on `0.1.2-rc.1`, `0.1.5-rc.2` and `0.2.0-rc.2` (each booted in its own profile: the Settings → Notifications section registers, i.e. the plugin's `apply` really runs), and previously on `0.1.1-rc.2`. Two traps are worth remembering: a package listed in `dsh.client.inject` that a newer runtime no longer ships parks the client entry at `pending (waiting for services: …)` forever — which is what broke 1.1.3 on `0.1.2-rc.1` and later; and when the host renames a store or a field nothing throws, alerts just go **silent** — `0.2.0-rc.2` moved `pendingInteractions`→`sessionStatus`, `list.current`→`retainedBy.mainView` and `sessions.open()`→`uiWorkspace.openSession()`. So every adaptation must confirm `window.__dshNotifyMe.debug()` reports `bound` and which source answered.
-
-**Verify** — open the DevTools console and run:
-
-```js
-window.__dshNotifyMe.test("done")        // "reply finished" sample
-window.__dshNotifyMe.test("attention")   // "needs your input" sample
-window.__dshNotifyMe.test("approval")    // "approval buttons" sample: try the Approve / Reject buttons on the toast
-window.__dshNotifyMe.debug()             // the bridge field reports the button channel: "active" = buttons work
-```
-
-Nothing happened? 90% of the time it's one of:
-
-- the notification permission was declined — click anywhere on the page and choose **Allow** (address-bar lock → Site settings → Notifications → Allow → reload);
-- the DSH process wasn't restarted after install;
-- your OS/browser notification settings block the browser's toasts.
 
 ## Advanced: console configuration
 
@@ -140,8 +164,10 @@ window.__dshNotifyMe.setConfig({
 })
 window.__dshNotifyMe.resetConfig()                // restore defaults (also drops any picked audio files)
 window.__dshNotifyMe.decide("approval:3", "allowed-once")  // programmatic decision: "allowed-once" | "rejected"
-window.__dshNotifyMe.testExternal()               // send one test notification to every push target, resolves {sent, unverified, failed, statuses}
+window.__dshNotifyMe.testExternal()               // explicit outbound test to valid targets; resolves {sent, unverified, failed, statuses}
 ```
+
+> **External-test switch behavior:** the settings page's "Send test notification" button requires both the plugin and external-forwarding master switches to be on, but ignores the two per-kind forwarding switches. The console `testExternal()` call is an explicit test: with valid configured targets, it sends to them even when those master switches are off; with no valid targets it sends nothing. Ordinary `test("done")` / `test("attention")` / `test("approval")` calls only test local alerts and never forward externally.
 
 > Picked audio files do not live in `dshNotifyMe.config`: each kind gets its own key (`dshNotifyMe.sound.done` / `dshNotifyMe.sound.attention`, holding `{name, size, data}` with a data URL), because a file inflates by ~1.37x once base64-encoded and would slow down every config read. `resetConfig()` clears both keys along with the config.
 >

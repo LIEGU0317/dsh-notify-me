@@ -1829,79 +1829,91 @@ function collectText(node, out) {
   return out;
 }
 
+// Renders the Settings page once and returns the flattened text of the tree
+// plus the tree itself, so a case can assert both copy and node shape. `opts`
+// adds the toast/audio/fetch stands-ins a button-driving case needs.
+function settingsBoot(seedConfig, seedSound, opts) {
+  const registered = [];
+  const injected = [];
+  const fakeReact = makeFakeReact();
+  let dict = null;
+  const audio = makeAudioCapture();
+  const b = bootBundle({
+    withNotification: !!(opts && opts.withNotification),
+    require: (name) => (name === 'react' ? fakeReact : {}),
+    extend(sandbox, windowStub) {
+      if (opts && opts.withAudio) {
+        windowStub.AudioContext = audio.FakeAudioContext;
+        sandbox.Audio = makeAudioElementCapture().FakeAudio;
+      }
+      if (opts && opts.fetch) sandbox.fetch = opts.fetch;
+      if (seedConfig) sandbox.localStorage.setItem('dshNotifyMe.config', JSON.stringify(seedConfig));
+      if (seedSound) sandbox.localStorage.setItem('dshNotifyMe.sound.done', JSON.stringify(seedSound));
+    },
+  });
+  const host = buildHost({ withSessionStatus: true, withWorkspace: true });
+  host.ctx.locale = {
+    register(ns, d) { dict = d; return () => {}; },
+    bind: () => (k) => (dict && dict.zh[k]) || k,
+    subscribe: () => () => {},
+    getSnapshot: () => ({ active: 'zh' }),
+    getLocale: () => ({ active: 'zh' }),
+  };
+  host.ctx.slots = {
+    inject(slot, fn) { injected.push(slot); fn(); },
+    register(spec, comp) { const r = { spec, comp }; registered.push(r); return r; },
+  };
+  b.mod.apply(host.ctx);
+
+  assert(injected.indexOf('settings.section') !== -1, 'settings.section was injected');
+  const reg = registered.find((r) => r.spec && r.spec.id === 'dsh-notify-me');
+  assert(reg, 'the settings section registered');
+  let tree = null;
+  const render = () => {
+    fakeReact.__beforeRender();
+    const el = reg.comp({});
+    tree = el.type(el.props);
+    return tree;
+  };
+  tree = render();
+  const walk = (node, fn) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) { for (const n of node) walk(n, fn); return; }
+    fn(node);
+    if (node.children) for (const c of node.children) walk(c, fn);
+  };
+  return {
+    text: collectText(tree).join(' | '),
+    get tree() { return tree; },
+    audio,
+    lastNotification: b.lastNotification,
+    textNow: () => collectText(tree).join(' | '),
+    // Re-render on demand — some feedback (a test button's send verdict) lands
+    // asynchronously, after the press() that triggered it.
+    renderNow: () => { render(); return collectText(tree).join(' | '); },
+    walk,
+    // current-tree node lookup (a getter-based tree keeps this honest across
+    // re-renders)
+    find: (pred) => { let hit = null; walk(tree, (n) => { if (!hit && pred(n)) hit = n; }); return hit; },
+    findAll: (pred) => { const out = []; walk(tree, (n) => { if (pred(n)) out.push(n); }); return out; },
+    configNow: () => b.win.__dshNotifyMe.config,
+    // Press the exact control the user presses, then re-render the way React
+    // would, so the feedback the press produced is readable.
+    press: (aria) => {
+      let hit = null;
+      walk(tree, (n) => { if (!hit && n.props && n.props['aria-label'] === aria) hit = n; });
+      assert(hit, 'no rendered control labelled ' + aria);
+      hit.props.onClick();
+      render();
+    },
+    cleanup: () => { for (const c of [...host.cleanups]) c(); },
+  };
+}
+
 function settingsSoundRows() {
   console.log('\n— settings page: alert sound source rows —');
 
-  // boot() renders the Settings page once and returns the flattened text of the
-  // tree plus the tree itself, so a case can assert both copy and node shape.
-  // `opts` adds the toast/audio stands-ins a button-driving case needs.
-  function boot(seedConfig, seedSound, opts) {
-    const registered = [];
-    const injected = [];
-    const fakeReact = makeFakeReact();
-    let dict = null;
-    const audio = makeAudioCapture();
-    const b = bootBundle({
-      withNotification: !!(opts && opts.withNotification),
-      require: (name) => (name === 'react' ? fakeReact : {}),
-      extend(sandbox, windowStub) {
-        if (opts && opts.withAudio) {
-          windowStub.AudioContext = audio.FakeAudioContext;
-          sandbox.Audio = makeAudioElementCapture().FakeAudio;
-        }
-        if (seedConfig) sandbox.localStorage.setItem('dshNotifyMe.config', JSON.stringify(seedConfig));
-        if (seedSound) sandbox.localStorage.setItem('dshNotifyMe.sound.done', JSON.stringify(seedSound));
-      },
-    });
-    const host = buildHost({ withSessionStatus: true, withWorkspace: true });
-    host.ctx.locale = {
-      register(ns, d) { dict = d; return () => {}; },
-      bind: () => (k) => (dict && dict.zh[k]) || k,
-      subscribe: () => () => {},
-      getSnapshot: () => ({ active: 'zh' }),
-      getLocale: () => ({ active: 'zh' }),
-    };
-    host.ctx.slots = {
-      inject(slot, fn) { injected.push(slot); fn(); },
-      register(spec, comp) { const r = { spec, comp }; registered.push(r); return r; },
-    };
-    b.mod.apply(host.ctx);
-
-    assert(injected.indexOf('settings.section') !== -1, 'settings.section was injected');
-    const reg = registered.find((r) => r.spec && r.spec.id === 'dsh-notify-me');
-    assert(reg, 'the settings section registered');
-    let tree = null;
-    const render = () => {
-      fakeReact.__beforeRender();
-      const el = reg.comp({});
-      tree = el.type(el.props);
-      return tree;
-    };
-    tree = render();
-    const walk = (node, fn) => {
-      if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { for (const n of node) walk(n, fn); return; }
-      fn(node);
-      if (node.children) for (const c of node.children) walk(c, fn);
-    };
-    return {
-      text: collectText(tree).join(' | '),
-      tree,
-      audio,
-      lastNotification: b.lastNotification,
-      textNow: () => collectText(tree).join(' | '),
-      // Press the exact control the user presses, then re-render the way React
-      // would, so the feedback the press produced is readable.
-      press: (aria) => {
-        let hit = null;
-        walk(tree, (n) => { if (!hit && n.props && n.props['aria-label'] === aria) hit = n; });
-        assert(hit, 'no rendered control labelled ' + aria);
-        hit.props.onClick();
-        render();
-      },
-      cleanup: () => { for (const c of [...host.cleanups]) c(); },
-    };
-  }
+  const boot = settingsBoot;
 
   // 1) defaults: both kinds expose the source selector, no file picker yet.
   const base = boot();
@@ -1980,6 +1992,272 @@ async function listChangeDerivation() {
   console.log('list-change derivation OK: byId enumerated ' + small + ' time(s) for 4 rows and ' + large + ' for 40 (constant)');
 }
 
+// ── 外部通知转发（webhook） ─────────────────────────────────────────
+// 转发链路的承诺只有几条：默认全关、不填端点就什么都不发；测试按钮发的是测试
+// 消息而不是假提醒；每类提醒的转发开关只拦真实提醒；CORS 被拒时降级 no-cors
+// 送出并如实标「不可确认」，真正的 HTTP 错误不盲重试。
+async function externalWebhooks() {
+  console.log('\n— external webhook forwarding —');
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  // A fetch stand-in recording every call; `behavior` answers (or throws).
+  function fetchSpy(behavior) {
+    const calls = [];
+    const fn = (url, opts) => {
+      const rec = { url: String(url), opts: opts || {}, body: String((opts && opts.body) || '') };
+      calls.push(rec);
+      try {
+        return Promise.resolve(behavior(rec));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    };
+    return { calls, fn };
+  }
+  function bootWeb(behavior, seed) {
+    const spy = fetchSpy(behavior || (() => ({ ok: true, status: 204 })));
+    const b = bootBundle({
+      extend(sandbox) {
+        sandbox.fetch = spy.fn;
+        if (seed) sandbox.localStorage.setItem('dshNotifyMe.config', JSON.stringify(seed));
+      },
+    });
+    const host = buildHost({ withSessionStatus: true });
+    b.mod.apply(host.ctx);
+    return { b, host, calls: spy.calls, win: b.win };
+  }
+
+  // 1) defaults: off, no targets, and the debug block tells the same story.
+  const base = bootWeb();
+  const d0 = base.win.__dshNotifyMe.debug().external;
+  assert(d0.enabled === false && d0.targets === 0 && d0.activeTargets === 0,
+    'external forwarding defaults off with no targets, got ' + JSON.stringify(d0));
+  assert(d0.sent === 0 && d0.unverified === 0 && d0.failed === 0, 'the counters start at zero');
+  const r0 = await base.win.__dshNotifyMe.testExternal();
+  assert(r0.sent === 0 && r0.statuses.length === 0, 'testExternal with no targets resolves empty');
+  assert(base.calls.length === 0, 'nothing is sent without targets');
+
+  // 2) the toast test path never pings: test alerts deliver locally and must
+  //    not leak to webhooks even with everything armed.
+  const armed = bootWeb(null, {
+    externalEnabled: true,
+    externalTargets: [
+      { id: 't1', type: 'custom', url: 'https://hook.example/x' },
+      { id: 't2', type: 'discord', url: 'https://discord.com/api/webhooks/1/y' },
+    ],
+  });
+  armed.win.__dshNotifyMe.test('done');
+  assert(armed.calls.length === 0, 'a toast test sends no webhook');
+
+  // 3) testExternal hits every target with that service's payload shape.
+  const r1 = await armed.win.__dshNotifyMe.testExternal();
+  assert(r1.sent === 2 && r1.failed === 0, 'both targets report sent, got ' + JSON.stringify(r1));
+  assert(armed.calls.length === 2, 'one POST per target');
+  const customCall = armed.calls.find((c) => c.url === 'https://hook.example/x');
+  const custom = JSON.parse(customCall.body);
+  assert(custom.source === 'dsh-notify-me' && custom.event === 'attention' && custom.title === '外部通知测试',
+    'custom payload shape, got ' + JSON.stringify(custom));
+  assert(custom.sessionId !== undefined && !!custom.time, 'custom payload carries sessionId + time');
+  const discord = JSON.parse(armed.calls.find((c) => c.url.indexOf('discord.com') !== -1).body);
+  assert(discord.username === 'DSH' && discord.content.indexOf('外部通知测试') === 0,
+    'discord payload shape, got ' + JSON.stringify(discord));
+  assert(armed.calls.every((c) => c.opts.mode === 'cors' && String(c.opts.headers['Content-Type']) === 'application/json'),
+    'first attempts are CORS JSON POSTs');
+  const d1 = armed.win.__dshNotifyMe.debug().external;
+  assert(d1.sent === 2 && d1.targets === 2 && d1.activeTargets === 2, 'debug tallies the sends');
+
+  // 4) real alerts mirror through fire(); the per-kind toggles gate only them.
+  armed.calls.length = 0;
+  const host = armed.host;
+  const doc = armed.b.doc;
+  doc.hidden = true; doc.visibilityState = 'hidden';
+  host.setList({ ids: ['s2'], byId: { s2: { running: true, displayTitle: '后台任务', retainedBy: {} } }, phase: 'ready' });
+  host.notifyList();
+  host.setStatus(new Map([['s2', statusRow(question('question:901', { sessionId: 's2' }))]]));
+  host.notifyStatus();
+  await flush();
+  assert(armed.calls.length === 2, 'a delivered attention alert mirrors to both targets, got ' + armed.calls.length);
+  const mirrored = JSON.parse(armed.calls[0].body);
+  assert(mirrored.event === 'attention' && mirrored.title === 'DSH · 提问',
+    'the mirror carries the real alert copy, got ' + JSON.stringify(mirrored));
+
+  armed.win.__dshNotifyMe.setConfig({ externalAttention: false });
+  armed.calls.length = 0;
+  host.setStatus(new Map([['s2', statusRow(question('question:902', { sessionId: 's2' }))]]));
+  host.notifyStatus();
+  await flush();
+  assert(armed.calls.length === 0, 'externalAttention:false silences the mirror');
+  assert(armed.b.events.some((e) => e.kind === 'attention'), 'the local alert still fired');
+
+  // done alerts de-dupe within 250ms; pace the two done cases past the window.
+  await new Promise((r) => setTimeout(r, 300));
+  armed.win.__dshNotifyMe.setConfig({ externalAttention: true, externalDone: false });
+  armed.calls.length = 0;
+  host.setStatus(new Map([['s2', statusRow(null, { running: false, completionUnread: true })]]));
+  host.notifyStatus();
+  await flush();
+  assert(armed.calls.length === 0, 'externalDone:false silences the done mirror');
+
+  await new Promise((r) => setTimeout(r, 300));
+  armed.win.__dshNotifyMe.setConfig({ externalDone: true });
+  armed.calls.length = 0;
+  host.setStatus(new Map([['s2', statusRow(null, { running: false, completionUnread: false })]]));
+  host.notifyStatus();
+  host.setStatus(new Map([['s2', statusRow(null, { running: false, completionUnread: true })]]));
+  host.notifyStatus();
+  await flush();
+  assert(armed.calls.length === 2, 'a done alert mirrors to both targets, got ' + armed.calls.length);
+  const doneMirror = JSON.parse(armed.calls[0].body);
+  assert(doneMirror.event === 'done', 'the done mirror is labelled as such, got ' + JSON.stringify(doneMirror));
+
+  // master switch: even a delivered alert sends nothing while it is off.
+  await new Promise((r) => setTimeout(r, 300));
+  armed.win.__dshNotifyMe.setConfig({ externalEnabled: false });
+  armed.calls.length = 0;
+  host.setStatus(new Map([['s2', statusRow(question('question:903', { sessionId: 's2' }))]]));
+  host.notifyStatus();
+  await flush();
+  assert(armed.calls.length === 0, 'the master switch stops all forwarding');
+
+  // 5) a rejecting CORS call falls back to a no-cors POST: still delivered,
+  //    reported honestly as unverifiable.
+  const cors = bootWeb((rec) => {
+    if (rec.opts.mode === 'cors') throw new TypeError('Failed to fetch');
+    return { ok: true, status: 204 };
+  }, { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] });
+  const r2 = await cors.win.__dshNotifyMe.testExternal();
+  assert(r2.unverified === 1 && r2.sent === 0, 'the opaque fallback counts unverified, got ' + JSON.stringify(r2));
+  assert(cors.calls.length === 2 && cors.calls[1].opts.mode === 'no-cors', 'the fallback is a no-cors POST');
+  assert(String(cors.calls[1].opts.headers['Content-Type']).indexOf('text/plain') === 0,
+    'the fallback switches to text/plain (a simple request)', );
+
+  // 6) a real HTTP error is reported, never blindly retried.
+  const http = bootWeb(() => ({ ok: false, status: 500 }), { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] });
+  const r3 = await http.win.__dshNotifyMe.testExternal();
+  assert(r3.failed === 1 && r3.statuses[0] === 'failed (HTTP 500)', 'HTTP errors are reported, got ' + JSON.stringify(r3));
+  assert(http.calls.length === 1, 'no retry after a real HTTP error');
+
+  // 7) bark gets its third chance in the classic GET shape.
+  const bark = bootWeb((rec) => {
+    if (rec.opts.method === 'GET') {
+      if (rec.opts.mode !== 'no-cors') throw new TypeError('Failed to fetch');
+      return { ok: true, status: 204 };
+    }
+    throw new TypeError('Failed to fetch');
+  }, { externalEnabled: true, externalTargets: [{ id: 't1', type: 'bark', url: 'https://api.day.app/KEY' }] });
+  const r4 = await bark.win.__dshNotifyMe.testExternal();
+  assert(r4.unverified === 1, 'bark falls back to the GET shape, got ' + JSON.stringify(r4));
+  const barkGet = bark.calls.filter((c) => c.opts.method === 'GET').pop();
+  assert(barkGet && barkGet.url.indexOf('https://api.day.app/KEY/') === 0 && barkGet.url.split('/').length > 4,
+    'the GET carries title/body in the path, got ' + (barkGet && barkGet.url));
+
+  // 8) stale entries are pruned, not fatal: bad URLs never leave the browser.
+  const bad = bootWeb(null, {
+    externalEnabled: true,
+    externalTargets: [
+      { id: 't1', type: 'custom', url: 'javascript:alert(1)' },
+      { id: 't2', type: 'weird-type', url: 'https://hook.example/ok' },
+    ],
+  });
+  const d2 = bad.win.__dshNotifyMe.debug().external;
+  assert(d2.targets === 2 && d2.activeTargets === 1, 'invalid URLs are pruned, unknown types coerce to custom');
+  const r5 = await bad.win.__dshNotifyMe.testExternal();
+  assert(r5.statuses.length === 1 && bad.calls.length === 1, 'only the valid target is contacted');
+  assert(JSON.parse(bad.calls[0].body).source === 'dsh-notify-me', 'the coerced target gets the custom payload');
+
+  console.log('external webhooks OK: gated mirroring, payload shapes, no-cors fallback, honest statuses');
+}
+
+// ── 设置页：外部通知卡片 ────────────────────────────────────────────
+async function settingsExternalRows() {
+  console.log('\n— settings page: external notification rows —');
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  // 1) defaults: the card renders, nothing is on, the empty state is spelled out.
+  const base = settingsBoot();
+  assert(base.text.indexOf('外部通知') !== -1, 'the external card header renders');
+  assert(base.text.indexOf('转发外部通知') !== -1, 'the master switch row renders');
+  assert(base.text.indexOf('转发「需要你」') !== -1 && base.text.indexOf('转发「回复完成」') !== -1,
+    'both per-kind rows render');
+  assert(base.text.indexOf('还没有推送目标') !== -1, 'the empty state is spelled out');
+  const master = base.find((n) => n.props && n.props['aria-label'] === '转发外部通知');
+  assert(master && master.props['aria-checked'] === 'false', 'the master switch starts off');
+  base.cleanup();
+
+  // 2) a seeded target renders its URL in the input and the privacy note.
+  const seeded = settingsBoot({ externalEnabled: true, externalTargets: [{ id: 't1', type: 'bark', url: 'https://api.day.app/KEY' }] });
+  const urlInput = seeded.find((n) => n.props && n.props['aria-label'] === '推送地址');
+  assert(urlInput && urlInput.props.value === 'https://api.day.app/KEY', 'the seeded URL lands in the input');
+  assert(seeded.text.indexOf('只填你自己信任的端点') !== -1, 'the privacy note renders once a target exists');
+  const master2 = seeded.find((n) => n.props && n.props['aria-label'] === '转发外部通知');
+  assert(master2 && master2.props['aria-checked'] === 'true', 'the seeded master switch reads on');
+
+  // 3) the switch toggles and persists through setConfig.
+  seeded.press('转发外部通知');
+  assert(seeded.configNow().externalEnabled === false, 'toggling the master switch persists');
+  seeded.press('转发外部通知');
+
+  // 4) add / edit / delete targets.
+  seeded.press('添加目标');
+  assert(seeded.configNow().externalTargets.length === 2, 'add appends a target');
+  let inputs = seeded.findAll((n) => n.props && n.props['aria-label'] === '推送地址');
+  assert(inputs.length === 2, 'two URL inputs render');
+  assert(inputs[1].props.value === '', 'the fresh target starts empty');
+  inputs[1].props.onChange({ currentTarget: { value: 'https://discord.com/api/webhooks/1/y' } });
+  assert(seeded.configNow().externalTargets[1].url === 'https://discord.com/api/webhooks/1/y',
+    'url edits land in config');
+  // re-render the way React would: the next handler must close over the fresh
+  // cfg, otherwise it rebuilds the list from the stale one and drops this edit.
+  seeded.renderNow();
+  const typeSelect = seeded.findAll((n) => n.props && n.props['aria-label'] === '推送类型').pop();
+  typeSelect.props.onChange({ currentTarget: { value: 'discord' } });
+  assert(seeded.configNow().externalTargets[1].type === 'discord', 'type edits land in config');
+  assert(seeded.configNow().externalTargets[1].url === 'https://discord.com/api/webhooks/1/y',
+    'the type edit does not drop the url edit');
+  seeded.renderNow();
+  seeded.press('删除这个目标');
+  assert(seeded.configNow().externalTargets.length === 1, 'delete removes a target');
+  assert(seeded.configNow().externalTargets[0].url === 'https://discord.com/api/webhooks/1/y',
+    'the pressed row is the one removed'); // press() hits the first row, t1 goes
+  seeded.cleanup();
+
+  // 5) the test button posts and reports the verdict.
+  const calls = [];
+  const test = settingsBoot(
+    { enabled: true, externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] },
+    null,
+    { fetch: (url, opts) => { calls.push({ url, opts: opts || {} }); return Promise.resolve({ ok: true, status: 204 }); } }
+  );
+  test.press('测一测外部通知');
+  assert(test.textNow().indexOf('发送中') !== -1, 'the test button reports progress in flight');
+  await flush();
+  const after = test.renderNow();
+  assert(after.indexOf('测试通知：成功 1') !== -1, 'the verdict counts render, got ' + after);
+  assert(calls.length === 1 && calls[0].url === 'https://hook.example/x', 'the test pinged the target');
+  assert(String(calls[0].opts.body).indexOf('外部通知测试') !== -1, 'the test payload carries the test copy');
+  test.cleanup();
+
+  // 6) the "why did nothing send" cases get hints instead of a dead control.
+  const offCalls = [];
+  const off = settingsBoot(
+    { enabled: true, externalEnabled: false, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] },
+    null,
+    { fetch: (url) => { offCalls.push(String(url)); return Promise.resolve({ ok: true, status: 204 }); } }
+  );
+  off.press('测一测外部通知');
+  assert(off.textNow().indexOf('先打开「转发外部通知」') !== -1, 'master-off gets a hint');
+  assert(offCalls.length === 0, 'master-off sends nothing');
+  off.cleanup();
+
+  const none = settingsBoot({ enabled: true, externalEnabled: true }, null,
+    { fetch: () => Promise.resolve({ ok: true, status: 204 }) });
+  none.press('测一测外部通知');
+  assert(none.textNow().indexOf('先添加至少一个推送目标') !== -1, 'no-target gets a hint');
+  none.cleanup();
+
+  console.log('external settings rows OK: card renders, targets edit/persist, test button reports, hints for the silent cases');
+}
+
 (async () => {
   await legacyHost();
   await currentHost();
@@ -1990,6 +2268,8 @@ async function listChangeDerivation() {
   await desktopRaiseChannel();
   await soundSources();
   settingsSoundRows();
+  await externalWebhooks();
+  await settingsExternalRows();
   await listChangeDerivation();
   console.log('\nALL SMOKE TESTS PASSED ✔');
   // Exit explicitly: marker-release timers stay armed on purpose (they mirror

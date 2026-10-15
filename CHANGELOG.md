@@ -2,6 +2,25 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.7.0] — 2026-10-16
+
+### 新增
+- **外部通知转发**（issue #12）：把「需要你」「回复完成」提醒同时转发到你自己的推送端点，临时离开电脑时手机上的推送渠道照样收到。支持 **Discord Webhook** / **Bark** / **Gotify** / **自定义 Webhook** 四类目标，可配多个、各选类型填地址；负载形状：Discord 走 `{"username":"DSH","content":…}`（正文超长截 1900 字符），Bark 走 `{title, body, group}`，Gotify 走 `{title, message, priority}`（「需要你」priority 8、「回复完成」5），自定义端点收一条 POST JSON `{source, event, title, body, sessionId, time}`。
+- 新配置项（默认保守，不填端点就什么都不发）：`externalEnabled`（转发主开关，默认 `false`）、`externalAttention` / `externalDone`（两类提醒各自可关，默认开）、`externalTargets`（推送目标列表）。
+- 设置页新增「外部通知」卡片：主开关、「转发「需要你」」「转发「回复完成」」、目标列表（类型下拉 + 地址 + 删除）、添加目标、隐私提示（提醒正文会原样外发，只填自己信任的端点）、「发送测试通知」。
+- `window.__dshNotifyMe.testExternal()`：向所有目标发一条测试消息（不受两类提醒开关限制，也不会冒充真提醒），返回 `{sent, unverified, failed, statuses}`；`window.__dshNotifyMe.debug()` 新增 `external` 块（开关状态、目标数/有效目标数、成功/不可确认/失败计数与最后状态）。
+
+### 变更
+- 转发挂在 `fire()` 里、本地提醒决定要发之后触发：**跟本地提醒完全同一套触发规则**（「当前对话不弹通知」「页面打开时也提醒」等开关同样管它）；设置页的「测试提醒」按钮与快捷裁决反馈走 `deliver()`，不会误发 webhook。
+- 跨域（CORS）口径：先走能读回响应的 CORS POST JSON；被拒（CORS/网络错误）时降级 no-cors + `text/plain` 送出，如实标为「已送出不可确认」（响应对页面不可见是浏览器规则，读不回就没法确认）；Bark 另有经典 GET（`<地址>/<标题>/<正文>`）兜底；HTTP 错误如实记失败、不盲重试。
+- 版本号 1.6.1 → 1.7.0；`window.__dshNotifyMe.version` 与 `package.json` 同步；npm 关键词新增 external-notification / webhook / discord / bark / gotify / push-notification / 外部通知 / 推送提醒。
+- README（中英）同步：搜索词、设置清单、提醒方式、控制台配置块（四个新键 + `testExternal()`）、已知限制的 CORS 说明；致谢名单新增 [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi)（issue #12 的功能建议）。
+
+### 测试
+- `smoke/smoke-test.cjs` 新增两段：① 转发链路（默认零外发、toast 测试不触发转发、四类负载形状、真实提醒镜像与两类开关、主开关、no-cors 降级、HTTP 500 单次不重试、Bark GET 兜底、非法 URL 剔除与未知类型归为 custom）；② 设置页「外部通知」卡片（渲染与空状态、目标增删改落配置、测试按钮反馈文案、两种静默原因的提示语）。
+- 修掉测试脚手架一处坑：假 React 里 onChange 事件之间不重渲染的话，下一个处理器闭包里的 `cfg` 还是旧的、会把前一次编辑悄悄覆盖（真 React 每个事件之间都会重渲染，产品代码不受影响）。为此把 `settingsBoot` 提升到模块级并补 `renderNow()` / `find` / `findAll` / `configNow()`；`rowSwitch` 开关按钮补 `aria-label`——可及性修正，同时让测试能按名按到。
+- `npm test` 两套件均通过（含 `smoke/cordis-host-test.mjs` 真 cordis 腿）。
+
 ## [1.6.1] — 2026-10-16
 
 ### 修复

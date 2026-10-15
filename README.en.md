@@ -28,7 +28,7 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 
 ---
 
-> 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
+> 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert**, **external notifications**, **Discord / Bark / Gotify push** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
 
 ## UI Preview
 
@@ -55,6 +55,7 @@ Open **Settings → Notify me** (refresh the page once after installing):
 - **Environment** (auto-detect by default) — identifies Web vs Desktop (DSH Desktop, `dsh-app://`) from the page protocol, with a manual override for hosts where detection comes out wrong: on the Desktop a toast click rides the `dsh://` deep link to raise the window and quick-decision buttons are unavailable; on the Web it is `window.focus()` plus the Service Worker bridge. Whenever the override disagrees with detection, the settings page says what detection saw;
 - **System notifications / Sound / Volume** — toast toggle, cue toggle and a volume slider;
 - **Alert sound** (picked separately for "needs you" and "reply finished") — built-in cue (default) / custom audio file / system notification sound. "Custom audio file" takes one local audio file in the settings page (1 MiB limit, stored in the browser, with preview and remove); "system notification sound" plays no plugin cue at all — the toast still appears and the operating system supplies the sound, so its timbre follows your system notification settings; in that mode "Preview" sends a test alert instead, because the sound only exists as part of a toast and that is the sound you hear. Any source that has no file, cannot be read, or does not fit falls back to the built-in cue, so an alert never goes silent;
+- **External notifications** (default off) — forward each alert to your own push endpoints as well, so it reaches you away from the machine: **Discord Webhook** / **Bark** / **Gotify** / **custom webhook**, any number of targets, each with a type and URL (Discord takes the webhook URL; Bark `https://api.day.app/<device key>`; Gotify `https://<server>/message?token=<app token>`; a custom endpoint receives one POST of JSON: `{source, event, title, body, sessionId, time}`). "Forward 'needs you'" and "Forward 'reply finished'" switch independently; **Send test notification** sends one test message to every target (not limited by those two switches, and never pretending to be a real alert). Forwarding follows exactly the same trigger rules as local alerts ("stay quiet for the conversation on screen" and friends apply to it too); the alert text is sent as-is to the addresses you fill in, so **only use endpoints you trust**;
 - **"Needs you" alerts while the page is open** (default on) and **"Reply finished" alerts while the page is open** (default off);
 - **Stay quiet for the conversation on screen** (default on): a wait inside the conversation you are looking at keeps only the tab marker — no toast or sound landing on the approval card. Backgrounding the page puts that alert back at once, unless you already handled it. Waits in other background sessions are unaffected;
 - **Ignore subagent sessions** (default on): background subagent child sessions raise neither "needs you" nor "reply finished" — those are steps of the parent conversation's turn, and the parent's own alert already covers them. The subagent session you have open alerts as usual. Turn it off to alert for every session;
@@ -71,6 +72,7 @@ Open **Settings → Notify me** (refresh the page once after installing):
 - **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; approval toasts can be decided straight from the buttons)
 - **Sound** — WebAudio beeps by default (distinct patterns for "needs you" vs "done"); each kind can instead play a picked audio file, or hand the sound over to the operating system's own notification sound
 - **Tab title marker** — while something is waiting on you, the tab title is prefixed with `🔔 Action needed · …` / `🔔 需要你 · …`; while a background session is **finished but unread**, with `✅ Reply finished · …` / `✅ 回复完成 · …`, gone once you open that session (or it starts running again). Both kinds can be up together, "needs you" first; a host title change is rebased under the markers
+- **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / custom webhook — so the push channel on your phone picks it up while you step away from the machine
 
 This is a **browser-layer** plugin: the DSH page must stay open (minimized or backgrounded is fine — that's exactly the "away" state it watches for).
 
@@ -129,10 +131,15 @@ window.__dshNotifyMe.setConfig({
   soundAttention: "synth",    // "needs you" cue source, same values
   volume: 0.5,                // 0..1
   autoFocus: true,            // clicking a toast opens the conversation it came from
-  quickActions: true          // Approve / Reject buttons on approval toasts
+  quickActions: true,         // Approve / Reject buttons on approval toasts
+  externalEnabled: false,     // external-notification forwarding master switch (default off: no endpoint, nothing is sent)
+  externalAttention: true,    // forward "needs you" (exactly the same trigger rules as local alerts)
+  externalDone: true,         // forward "reply finished"
+  externalTargets: []         // push targets: [{id, type:'discord'|'bark'|'gotify'|'custom', url}]
 })
 window.__dshNotifyMe.resetConfig()                // restore defaults (also drops any picked audio files)
 window.__dshNotifyMe.decide("approval:3", "allowed-once")  // programmatic decision: "allowed-once" | "rejected"
+window.__dshNotifyMe.testExternal()               // send one test notification to every push target, resolves {sent, unverified, failed, statuses}
 ```
 
 > Picked audio files do not live in `dshNotifyMe.config`: each kind gets its own key (`dshNotifyMe.sound.done` / `dshNotifyMe.sound.attention`, holding `{name, size, data}` with a data URL), because a file inflates by ~1.37x once base64-encoded and would slow down every config read. `resetConfig()` clears both keys along with the config.
@@ -174,6 +181,7 @@ Verified on the real shell (DSH Desktop 0.2.0-rc.2, three rounds of retesting in
 - On `>= 0.1.6` (including `0.2.0-rc.2`) the "reply finished" toast body carries only the session label, no assistant snippet: host snapshots no longer expose `nodes`. The alert itself still fires.
 - The title marker is written into `document.title` alongside the host: when the host recomputes the title it can overwrite the marker until the next alert event rewrites it.
 - "Stay quiet for the conversation on screen" is judged by `document.hidden`: a window fully covered by other apps still counts as visible, so waits in the current conversation stay quiet there too.
+- External notification forwarding is subject to browser CORS rules: an endpoint that does not allow cross-origin requests falls back to a "sent but unverifiable" delivery (no-cors) and is reported honestly as such; Discord webhooks do allow cross-origin, so delivery to them is confirmed. HTTP errors are recorded as failures and never blindly retried. Forwarding runs only after the local alert has decided to fire, so anything the rules silence is never sent out.
 
 ## Development
 
@@ -196,6 +204,7 @@ Contributors (by handle; the link points at the PR / issue they worked on):
 - [@EliteOtaku](https://github.com/EliteOtaku) — [#9](https://github.com/chromoany/dsh-notify-me/issues/9): the layer-by-layer investigation and three rounds of real-shell retesting of the desktop raise path (1.5.2) — confirming that a toast click raises the window and switches conversations reliably, and pinning down the reproduction difference ("gesture-less scripted injection is silently dropped by Chromium"), which corrected the initial "the sandbox blocks it" reading;
 - [@Wh1stle05](https://github.com/Wh1stle05) — [#10](https://github.com/chromoany/dsh-notify-me/pull/10): the per-kind alert sound source (built-in synth / picked audio file / system notification sound, chosen independently for "needs you" and "reply done"), with its settings UI, fallback chain, tests and docs; the two refinements — a "system" preview sending a real test notification instead of doing nothing, and the fake React holding hook state by index across renders — come from the same PR.
 - [@yanzhaohui1999](https://github.com/yanzhaohui1999) — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14): the 482-session idle-page CPU report (pinning `currentSessionId()` rescanning the whole table per row, 5.9%~6.5% of CPU) and the fix (derive the on-screen session once per list change), with a red-then-green regression assertion — a 4-row and a 40-row list change must cost the same (upstream reported 7 vs 43, 5 vs 5 after).
+- [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi) — [#12](https://github.com/chromoany/dsh-notify-me/issues/12): the external-notification forwarding suggestion (Discord Webhook / Bark / Gotify / custom webhook) and its use case (1.7.0).
 
 Attribution policy: external PRs are landed as maintainer commits — the original commit is not reused and no Co-authored-by trailer is added, so GitHub's contributors graph lists the maintainer only and contributors are credited above.
 

@@ -28,7 +28,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ---
 
-> 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**（npm 关键词已含以上中英文词）。
+> 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**、**外部通知**、**Discord / Bark / Gotify 推送**（npm 关键词已含以上中英文词）。
 
 ## 效果预览
 
@@ -55,6 +55,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **运行环境**（默认自动识别）：按页面协议识别 Web 端 / 桌面端（DSH Desktop，`dsh-app://`），识别不准时可手动指定——桌面端点通知走 `dsh://` 深链抬窗、快捷裁决按钮不可用；Web 端走 `window.focus()` 与 Service Worker 桥。手动覆盖与自动识别不一致时，设置页会明示检测结果；
 - **系统通知 / 提示音 / 音量**：Toast、提示音开关与音量滑块；
 - **音效来源**（「需要你」与「回复完成」各自独立选）：内置合成音（默认）/ 自定义音频文件 / 系统通知音。选「自定义音频文件」可在设置页挑一个本地音频（上限 1 MiB，存在浏览器本地，可试听与移除）；选「系统通知音」则完全不播插件音效，通知照发，声音交给操作系统（音色跟着系统通知设置走），此时「试听」会改发一条测试通知——该模式没有插件可播的音，你听到的就是它。任一来源缺文件、读不出来或存不下时自动回落到内置合成音，提醒不会因此变成哑的；
+- **外部通知**（默认关）：把提醒同时转发到你自己的推送端点，人不在电脑前也能收到——支持 **Discord Webhook** / **Bark** / **Gotify** / **自定义 Webhook**，可加多个目标，每个选类型填地址（Discord 填 Webhook 地址；Bark 填 `https://api.day.app/<设备密钥>`；Gotify 填 `https://<服务器>/message?token=<应用令牌>`；自定义端点收一条 POST JSON：`{source, event, title, body, sessionId, time}`）；「转发「需要你」」「转发「回复完成」」各自独立开关；**发送测试通知**往所有目标发一条测试消息（不受这两类开关限制，也不会冒充真提醒）。转发跟本地提醒走同一套触发规则（「当前对话不弹通知」等开关同样管它）；提醒正文会原样发往你填的地址，**只填你自己信任的端点**；
 - **页面打开时也提醒「需要你」**（默认开）与 **页面打开时也提醒「回复完成」**（默认关）；
 - **当前对话不弹通知**（默认开）：等待就发生在你正看着的对话里时只留标题标记，不弹通知也不响音（免得盖住审批卡片）；页面切到后台立刻补发，若你已经处理掉就作废。其它后台会话不受影响；
 - **子代理会话不提醒**（默认开）：后台子代理（subagent）子会话的「需要你」与「回复完成」都不提醒——它们是主对话那一轮的步骤，完成由主对话自己的提醒覆盖；你当前打开的那个子代理会话照常提醒；关掉后恢复逐会话提醒；
@@ -71,6 +72,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **系统通知**：经浏览器弹出的系统通知，进 Windows 通知中心或 macOS 通知中心（点击回到提醒所属的对话；审批的通知点按钮直接裁决）
 - **提示音**：默认是 WebAudio 合成音（「需要你」与「完成」使用不同音型）；可在设置里为两类提醒分别换成自定义音频文件，或改成让操作系统播放它自己的通知音
 - **标签页标题标记**：有待处理事项时，标题前出现 `🔔 需要你 · …` / `🔔 Action needed · …`；后台会话**完成但还没看**时出现 `✅ 回复完成 · …` / `✅ Reply finished · …`，打开对应会话（或它再次开跑）即消失。两种标记可同时出现，「需要你」在前；宿主改写标题后标记基于新标题重建
+- **外部通知**（可选，默认关）：按设置里配的推送目标，把同一条提醒转发到 Discord Webhook / Bark / Gotify / 自定义 Webhook——临时离开电脑时，手机上的推送渠道照样收到
 
 本插件是**浏览器层**实现：DSH 页面需保持打开（最小化/后台即可——那正是它监听的「离开」状态）。
 
@@ -125,10 +127,15 @@ window.__dshNotifyMe.setConfig({
   soundAttention: "synth",    // 「需要你」音效来源，取值同上
   volume: 0.5,                // 音量 0~1
   autoFocus: true,            // 点通知回到提醒所属的对话
-  quickActions: true          // 审批通知上的「同意 / 拒绝」按钮
+  quickActions: true,         // 审批通知上的「同意 / 拒绝」按钮
+  externalEnabled: false,     // 外部通知转发主开关（默认关：不填端点就什么都不发）
+  externalAttention: true,    // 转发「需要你」（触发规则跟本地提醒完全一致）
+  externalDone: true,         // 转发「回复完成」
+  externalTargets: []         // 推送目标：[{id, type:'discord'|'bark'|'gotify'|'custom', url}]
 })
 window.__dshNotifyMe.resetConfig()                // 恢复默认（同时清掉已选的自定义音效文件）
 window.__dshNotifyMe.decide("approval:3", "allowed-once")  // 程序化裁决："allowed-once" | "rejected"
+window.__dshNotifyMe.testExternal()               // 向所有推送目标发一条测试通知，返回 {sent, unverified, failed, statuses}
 ```
 
 > 自定义音效文件不在 `dshNotifyMe.config` 里，而是按类别各存一个键（`dshNotifyMe.sound.done` / `dshNotifyMe.sound.attention`，内容是 `{name, size, data}` 的 data URL）——一个文件转成 data URL 会膨胀约 1.37 倍，塞进配置会拖慢每次读取。`resetConfig()` 会连这两个键一起清掉。
@@ -170,6 +177,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 - `≥ 0.1.6`（含 `0.2.0-rc.2`）的「回复完成」提醒正文只有会话名，不再附带回复摘要——宿主快照已不再提供 `nodes`；提醒本身照常触发。
 - 标题标记由宿主与插件共同写 `document.title`：宿主重算标题时标记可能被覆盖，直到下一次提醒事件重新写成。
 - 「当前对话不弹通知」按 `document.hidden` 判定：窗口被别的应用完全盖住时仍算「页面可见」，此时当前对话的等待照样静默。
+- 外部通知转发受浏览器跨域（CORS）限制：端点不放行时自动降级为「送出但不可确认」（no-cors），如实标为「已送出不可确认」；Discord Webhook 官方放行跨域，可直接确认送达。HTTP 错误如实记失败、不重试。转发在本地提醒决定要发之后才触发，所以被「当前对话不弹通知」等规则静音的提醒也不会外发。
 
 ## 开发自检
 
@@ -192,6 +200,7 @@ npm pack --dry-run               # 预览发布包
 - [@EliteOtaku](https://github.com/EliteOtaku) — [#9](https://github.com/chromoany/dsh-notify-me/issues/9)：桌面端抬窗链路（1.5.2）的逐层排查与真实壳三轮复测——确认点通知抬窗 + 切会话稳定生效，并定位出「无用户手势的脚本化注入被 Chromium 静默丢弃」这一复现差异，纠正了最初「沙箱拦死」的判断；
 - [@Wh1stle05](https://github.com/Wh1stle05) — [#10](https://github.com/chromoany/dsh-notify-me/pull/10)：「音效来源」功能（内置合成音 / 自定义音频文件 / 系统通知音，「需要你」与「回复完成」各自独立选），含设置页交互、回落链与测试、文档；「系统通知音」试听改发测试通知、假 React 按索引跨渲染保持 hook 状态这两处修正同样出自该 PR。
 - [@yanzhaohui1999](https://github.com/yanzhaohui1999) — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14)：482 个会话下空闲页面烧 CPU 的性能报告（定位到 `currentSessionId()` 每行重扫全表，实测占 CPU 5.9%~6.5%）与修复（一次列表变化只推导一次「当前会话」），并带先红后绿的回归断言——4 行与 40 行的列表变化代价必须相等（上游报 7 vs 43，修后 5 vs 5）。
+- [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi) — [#12](https://github.com/chromoany/dsh-notify-me/issues/12)：外部通知转发（Discord Webhook / Bark / Gotify / 自定义 Webhook）的功能建议与使用场景（1.7.0）。
 
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。
 

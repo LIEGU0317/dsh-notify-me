@@ -158,7 +158,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 逐版本兼容声明以 [package.json](package.json) 的 `dsh.compatibility.dshReleases` 为准。
 
-实测**真正激活**（各自独立 profile 启动：设置里出现「通知提醒」分区，即插件的 `apply` 确实执行）于 `0.1.2-rc.1`、`0.1.5-rc.2` 与 `0.2.0-rc.2`；更早的 `0.1.1-rc.2` 亦验证过。
+实测**真正激活**（各自独立 profile 启动：插件条目进启动页 `__DSH_BOOT__` 且注入依赖解析通过、`/plugins/??dsh-notify-me/client.js&rev=…` 返回含新代码的构建，设置里出现「通知提醒」分区，即插件的 `apply` 确实执行）于 `0.1.2-rc.1`、`0.1.5-rc.1`、`0.1.5-rc.2` 与 `0.2.0-rc.2`；更早的 `0.1.1-rc.2` 亦验证过。
 
 <details>
 <summary>宿主代际与适配排查细节</summary>

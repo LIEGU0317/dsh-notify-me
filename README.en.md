@@ -162,7 +162,7 @@ This is a **browser-layer** plugin: the DSH page must stay open (minimized or ba
 
 Per-release compatibility declarations live in [package.json](package.json), under `dsh.compatibility.dshReleases`.
 
-Verified to actually activate on `0.1.2-rc.1`, `0.1.5-rc.2` and `0.2.0-rc.2` (each booted in its own profile: the Settings → Notifications section registers, i.e. the plugin's `apply` really runs), and previously on `0.1.1-rc.2`.
+Verified to actually activate on `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2` and `0.2.0-rc.2` (each booted in its own profile: the plugin entry lands in the boot page's `__DSH_BOOT__` with its inject dependencies resolved, `/plugins/??dsh-notify-me/client.js&rev=…` serves a build containing the new code, and the Settings → Notifications section registers, i.e. the plugin's `apply` really runs), and previously on `0.1.1-rc.2`.
 
 <details>
 <summary>Host generations and adaptation diagnostics</summary>

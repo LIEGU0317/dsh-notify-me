@@ -1,3 +1,5 @@
+<div align="center">
+
 # dsh-notify-me
 
 **Step away from DSH and know when to come back.**
@@ -12,6 +14,8 @@
 [![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.0--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
+</div>
 
 [Install](#installation) · [Preview](#ui-preview) · [Settings](#configure-it-from-dsh-settings) · [Compatibility](#compatibility) · [Changelog](CHANGELOG.md)
 

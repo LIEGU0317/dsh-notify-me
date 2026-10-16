@@ -1,3 +1,5 @@
+<div align="center">
+
 # dsh-notify-me
 
 **离开 DSH 页面，也能及时知道何时需要回来。**
@@ -12,6 +14,8 @@
 [![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.0--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
+</div>
 
 [安装](#安装) · [效果预览](#效果预览) · [配置](#在-dsh-设置里改配置) · [兼容性](#兼容性) · [更新日志](CHANGELOG.md)
 

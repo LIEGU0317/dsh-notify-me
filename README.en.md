@@ -9,6 +9,9 @@
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
 [![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
 
+[![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.0--rc.2-6366f1.svg?style=flat-square)](#compatibility)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 [Install](#installation) · [Preview](#ui-preview) · [Settings](#configure-it-from-dsh-settings) · [Compatibility](#compatibility) · [Changelog](CHANGELOG.md)
 
 A notification plugin for DSH Web / Desktop, so you can keep full access off without watching the page all day.
@@ -18,6 +21,8 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 - **When you leave your computer:** optionally forward alerts to Discord, Bark, Gotify, or your own webhook.
 
 > Keep the page or desktop app running; backgrounding / minimizing is fine. System notifications require permission. Approval buttons need a Service Worker capable Web environment (such as `http://127.0.0.1` or `https`); Desktop uses buttonless notifications.
+
+> 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert**, **external notifications**, **Discord / Bark / Gotify push** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
 
 ## UI Preview
 
@@ -296,12 +301,9 @@ Attribution policy: external PRs are landed as maintainer commits — the origin
 MIT — see [LICENSE](LICENSE).
 
 <details>
-<summary>Downloads and plugin listing</summary>
+<summary>Downloads</summary>
 
 [![npm downloads](https://img.shields.io/npm/dm/dsh-notify-me?style=flat-square&label=downloads%2Fmonth&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
-[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
-
-> 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert**, **external notifications**, **Discord / Bark / Gotify push** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
 
 </details>

@@ -9,6 +9,9 @@
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
 [![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
 
+[![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.0--rc.2-6366f1.svg?style=flat-square)](#兼容性)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
 [安装](#安装) · [效果预览](#效果预览) · [配置](#在-dsh-设置里改配置) · [兼容性](#兼容性) · [更新日志](CHANGELOG.md)
 
 DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一直守着页面。
@@ -18,6 +21,8 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 - **离开电脑时**：可选转发到 Discord、Bark、Gotify 或自己的 Webhook。
 
 > 页面或桌面应用需保持运行，后台 / 最小化可以。系统通知需要通知权限；审批按钮仅在支持 Service Worker 的 Web 环境可用（如 `http://127.0.0.1` 或 `https`），桌面端使用无按钮通知。
+
+> 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**、**外部通知**、**Discord / Bark / Gotify 推送**（npm 关键词已含以上中英文词）。
 
 ## 效果预览
 
@@ -292,12 +297,9 @@ npm pack --dry-run               # 预览发布包
 MIT — 见 [LICENSE](LICENSE)。
 
 <details>
-<summary>下载统计与插件收录</summary>
+<summary>下载统计</summary>
 
 [![npm downloads](https://img.shields.io/npm/dm/dsh-notify-me?style=flat-square&label=downloads%2Fmonth&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
-[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
-
-> 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**、**外部通知**、**Discord / Bark / Gotify 推送**（npm 关键词已含以上中英文词）。
 
 </details>

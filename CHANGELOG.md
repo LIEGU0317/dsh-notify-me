@@ -2,6 +2,21 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.9.4] — 2026-10-20
+
+### 说明
+
+- **改口径：桌面端「点通知抬窗」不再当成必然**。DSH Desktop 0.2.1-rc.2（Windows）实测这条链路失效——通知点击回调照常执行（`navigator.userActivation.isActive === true`），但窗口不上前台；带 `dsh://open` 参数的第二实例 133 ms 后以退出码 1 结束，不带参数则 258 ms 退出码 0；用 `WM_SYSCOMMAND` 真实最小化后发深链，`IsIconic` 仍为 `true`，`focusPrimaryWindow()` 的 `restore()` 没生效；壳的 preload 也没有 focus/raise 类 IPC。复现与代码位置已提交 [deepseek-harness discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446)。
+- README（中英）：设置清单、「运行环境」说明、「桌面端怎么抬窗的」、已知限制四处按实测结果改写——插件照发深链，原生窗口能否上前台由壳决定；0.2.0-rc.2 上验证通过的结论与「深链必须在用户手势里发」的口径保留。
+
+### 变更
+
+- `lib/client.js`：`hostEnvHint` 中英两版去掉「把窗口带到前台」的确定性表述。
+
+### 测试
+
+- `npm test` 两套件通过（`ALL SMOKE TESTS PASSED ✔` / `cordis-host-test passed`）。
+
 ## [1.9.3] — 2026-10-20
 
 ### 变更

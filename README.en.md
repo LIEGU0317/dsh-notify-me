@@ -146,7 +146,7 @@ The overlay only knows which screen the window is on, not which screen you are l
 - **Stay quiet for the conversation on screen** (on): a wait belonging to the conversation you are looking at keeps only the tab marker so the approval card stays readable; backgrounding restores alerts;
 - **Also alert "reply finished" while the page is open** (off): by default only background finishes alert;
 - **Ignore subagent sessions** (on): skip background sessions spawned by a subagent — the parent conversation covers them; the one you have open still alerts;
-- **Click a toast to open that conversation** (on): the click brings DSH forward and switches conversation; with several tabs open only one is raised, and off means a click does nothing. Desktop window-raising details live in [Runtime & diagnostics](#runtime--diagnostics).
+- **Click a toast to open that conversation** (on): the click switches to the conversation that raised it; in a browser it also brings the window forward, while on the Desktop shell whether the native window comes forward depends on the shell version (see [How the Desktop window gets raised](#how-the-desktop-window-gets-raised)); with several tabs open only one is raised, and off means a click does nothing.
 
 ### Try it
 
@@ -182,7 +182,7 @@ Off by default. Supports Discord Webhook / Bark / Gotify / custom webhooks. Aler
 
 ### Runtime & diagnostics
 
-The last block inside Advanced. The page protocol is detected automatically to tell Web from Desktop (`dsh-app://`); override it by hand if detection is wrong — Desktop clicks raise the window through the `dsh://` deep link and carry no quick-decision buttons, while Web uses `window.focus()` plus the Service Worker bridge. When the override disagrees with detection the page says so.
+The last block inside Advanced. The page protocol is detected automatically to tell Web from Desktop (`dsh-app://`); override it by hand if detection is wrong — Desktop clicks fire the `dsh://` deep link (whether that actually raises the window depends on the shell version — see [How the Desktop window gets raised](#how-the-desktop-window-gets-raised)) and carry no quick-decision buttons, while Web uses `window.focus()` plus the Service Worker bridge. When the override disagrees with detection the page says so.
 
 <details>
 <summary>Alert language, Desktop window raising, reset</summary>
@@ -305,6 +305,8 @@ DSH Desktop is a thin Electron shell and its page lives under `dsh-app://app`: D
 
 Verified on the real shell (DSH Desktop 0.2.0-rc.2, three rounds of retesting in issue #9): a toast click raises the window and switches the conversation in one step, stable across sessions and with the window in the background. Timing of the fire is what makes the chain work: the deep link must be launched from a **user-gesture handler** — the notification's `onclick` carries one, which is why the product path works — while gesture-less scripted injection (an iframe appended from a CDP evaluate, say) is silently dropped by Chromium and the external protocol never launches, which looks exactly like the channel being blocked.
 
+**Regression on 0.2.1-rc.2 / Windows** (measured 2026-10-20): the toast click handler still runs (`navigator.userActivation.isActive === true`, `visibilityState` is `hidden`), but the window no longer comes forward. Shell-side evidence: launching a second instance with the `dsh://open` argument exits with code 1 after 133 ms, while launching it without arguments exits with code 0 after 258 ms (the normal single-instance yield), so the URL branch is what breaks. Minimizing the window for real via `WM_SYSCOMMAND` and then firing the deep link — or relaunching with no arguments — leaves `IsIconic` at `true`, so `focusPrimaryWindow()`'s `restore()` never takes effect. There is no page-side fallback either: the shell preload only exposes `dshDesktop`, the directory picker and locale, and `DESKTOP_IPC` has no focus/raise channel. The repro and code locations are filed upstream in [deepseek-harness discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446). The plugin's part ends there: it still fires the deep link; raising the native window is the shell's call.
+
 </details>
 
 ## Known limitations
@@ -313,6 +315,7 @@ Verified on the real shell (DSH Desktop 0.2.0-rc.2, three rounds of retesting in
 - Notifications appear through the browser, so the browser needs "show notifications" permission in the OS notification settings, and notification-center "Do Not Disturb" must not suppress them.
 - The first sound/toast of each page load needs one user click on the page first (browser autoplay + permission policy).
 - Toasts are only produced once the notification permission is granted; declining means sound + title marker only.
+- On the Desktop shell (DSH Desktop 0.2.1-rc.2 / Windows) a toast click no longer brings the window forward by itself: the plugin fires the `dsh://open` deep link, but the shell does not raise the window ([discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446)). Switching to the conversation still works.
 - System notification banners are drawn on the primary display only: Windows has no setting and Chromium no API to aim one at another monitor, so on a multi-monitor setup the second screen never receives them. Use the in-page overlay for that — it follows the DSH window to its display.
 - Quick-decision buttons need a Service Worker: they work on `http://127.0.0.1` and `https`, not on plain `http://192.168.x.x`-style LAN addresses, and some browsers or desktop hosts never render notification buttons. **The Desktop (`dsh-app://`) is tested and cannot register a Service Worker**, so buttons never render there and approval toasts fall back to their buttonless form. The `bridge` field of `window.__dshNotifyMe.debug()` says why; everything else keeps working.
 - macOS: in the browser, alerts, sounds, the title marker and toast-click navigation carry no OS assumptions and work as on Windows. Two caveats: DSH Desktop (Electron) notifications require the app to be code-signed — unsigned builds simply emit no notification — and whether the official macOS build satisfies that is untested; and notification buttons on the macOS desktop host are likewise untested (the Windows desktop host is tested and renders none, see the line above), falling back to the buttonless form above.

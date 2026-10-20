@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
-[![Client bundle size](https://img.shields.io/badge/client-%7E161%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E164%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.1--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -47,7 +47,7 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 
 ![通知提醒设置页：页眉、提醒方式、什么时候提醒、试一试与折叠的高级设置](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-zh.png)
 
-真实插件设置组件（v1.9.0 默认配置）在独立演示环境里整页渲染；只保留左侧导航作参照，不是 DSH 宿主外壳。
+真实插件设置组件（v1.9.2 默认配置）在独立演示环境里按内容列整页渲染；每行的说明改成鼠标悬浮才出现的小方框，所以这里只看到标题。
 </details>
 
 ## 安装
@@ -112,7 +112,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ## 在 DSH 设置里改配置
 
-打开 **设置 → 通知提醒**。页面按「提醒方式 → 什么时候提醒 → 试一试」三段排开，不常改的收进底部「高级设置」，点一下展开。
+打开 **设置 → 通知提醒**。页面按「提醒方式 → 什么时候提醒 → 试一试」三段排开，不常改的收进底部「高级设置」，点一下展开。每行只写标题，具体说明在鼠标移上去时弹出的小方框里（触屏或键盘操作时留一份隐藏文本给读屏）。
 
 ### 提醒方式
 

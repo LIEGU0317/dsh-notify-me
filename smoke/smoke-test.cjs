@@ -2476,7 +2476,7 @@ function overlayChannel() {
 function settingsOverlayRows() {
   console.log('\n\u2014 settings page: alert channel choice \u2014');
   const base = settingsBoot();
-  assert(base.text.indexOf('页面浮层提醒') !== -1, 'the overlay channel row renders');
+  assert(base.text.indexOf('浮层提醒') !== -1, 'the overlay channel option renders');
   assert(base.text.indexOf('系统通知只会出现在主屏') !== -1, 'the hint explains why the overlay exists');
   // The explanation hangs off the label text only — hovering a switch or a
   // slider must not pop a box the user did not ask for.
@@ -2490,17 +2490,20 @@ function settingsOverlayRows() {
     && String(n.props.className).indexOf('dnm-rowTip') !== -1);
   assert(rowTips.length === 0, 'no whole row is a tooltip target');
 
-  // The two channels are a single choice, so they render as radios.
-  const radios = base.findAll((n) => n.props && n.props.type === 'radio');
-  assert(radios.length === 2, 'exactly two radios pick the alert channel, got ' + radios.length);
-  const toastRadio = base.find((n) => n.props && n.props.type === 'radio' && n.props['aria-label'] === '系统通知');
-  const overlayRadio = base.find((n) => n.props && n.props.type === 'radio' && n.props['aria-label'] === '页面浮层提醒');
-  assert(toastRadio && toastRadio.props.checked === true, 'system notifications are the default channel');
-  assert(overlayRadio && overlayRadio.props.checked === false, 'the overlay starts unselected');
+  // The two channels are a single choice, drawn as one segmented control: the
+  // active half is filled, the other stays flat.
+  const seg = base.findAll((n) => n.props && n.props.role === 'radio');
+  assert(seg.length === 2, 'exactly two options pick the alert channel, got ' + seg.length);
+  const toastBtn = base.find((n) => n.props && n.props.role === 'radio' && n.props['aria-label'] === '系统通知');
+  const overlayBtn = base.find((n) => n.props && n.props.role === 'radio' && n.props['aria-label'] === '浮层提醒');
+  assert(toastBtn && toastBtn.props['aria-checked'] === 'true', 'system notifications are the default channel');
+  assert(overlayBtn && overlayBtn.props['aria-checked'] === 'false', 'the overlay starts unselected');
+  assert(toastBtn.props.className.indexOf('on') !== -1 && overlayBtn.props.className.indexOf('on') === -1,
+    'only the active half is filled in');
   assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
     'no corner select while the overlay is off');
 
-  base.press('页面浮层提醒');
+  base.press('浮层提醒');
   assert(base.configNow().channel === 'overlay' && base.configNow().overlay === true,
     'picking the overlay persists the channel, got ' + JSON.stringify(base.configNow().channel));
   assert(base.configNow().toast === false, 'the legacy mirrors follow the channel');

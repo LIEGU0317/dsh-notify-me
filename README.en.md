@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
-[![Client bundle size](https://img.shields.io/badge/client-%7E172%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E173%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.1--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -47,7 +47,7 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 
 ![The Notify me settings page: header, how you get told, when to alert, try it, and the collapsed Advanced block](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-en.png)
 
-The real settings component (v1.10.1 defaults) rendered in a standalone demo shell. The alert channel is a single choice, and row explanations live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
+The real settings component (v1.10.2 defaults) rendered in a standalone demo shell. Alert type is a segmented control, and row explanations live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
 </details>
 
 ## Installation
@@ -121,7 +121,7 @@ Open **Settings → Notify me**. The page runs as how you get told, when to aler
 ### How you get told
 
 - **Enable reminders**: master switch — off means no toasts, no sounds, and the tab title is left alone;
-- **How you get told (pick one)**: system notifications or the in-page overlay — a single choice, so turning one on turns the other off;
+- **Alert type (pick one)**: one segmented control — system notifications on the left, in-page overlay on the right; whichever you pick is the only channel used;
   - **System notifications** (default): native toasts landing in the Windows / macOS notification center; needs notification permission;
   - **In-page overlay**: cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. Click the row open to pick one of four corners when it is the chosen channel. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
 - **Sound / Volume**: the switch is direct; the slider folds into that row — click the title (▸ turns into ▾) to reveal it. What it plays comes from Advanced → Alert sound;
@@ -137,7 +137,7 @@ The **in-page overlay** skips the notification center and draws the card inside 
 - **No notification permission needed** — it works when permission was never granted, and on the Desktop shell where buttonless toasts are all the OS channel can do;
 - **Approval cards carry Approve / Reject** — the same decision as Allow once / Reject on the approval card, and they work on the Desktop too (no Service Worker involved). Clicking the card body opens its conversation;
 - **Lifetime** — "needs you" cards retire after 12s, "reply finished" after 6s, and an approval card with buttons after 18s; a card or its close button retires one earlier. At most 4 cards stack at once;
-- **Relation to system notifications** — it is one or the other. Both used to be switchable at once, which meant every alert arrived twice and the pair covered each other; 1.10.0 makes it a single choice, and an old config with the overlay on migrates to it.
+- **Relation to system notifications** — it is one or the other. Both used to be switchable at once, which meant every alert arrived twice and the pair covered each other; 1.10.0 made it a single choice, and 1.10.2 turns that into one segmented row. An old config with the overlay on migrates to it.
 
 The overlay only knows which screen the window is on, not which screen you are looking at. If the window stays on the primary display while you watch another one, it stays invisible — same as a toast.
 

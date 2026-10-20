@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
-[![Client bundle size](https://img.shields.io/badge/client-%7E172%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E173%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.1--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -47,7 +47,7 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 
 ![通知提醒设置页：页眉、提醒方式、什么时候提醒、试一试与折叠的高级设置](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-zh.png)
 
-真实插件设置组件（v1.10.1 默认配置）在独立演示环境里渲染；提醒方式是一组单选，每行的说明在鼠标停在标题文字上时才出现，所以这里只看到标题。
+真实插件设置组件（v1.10.2 默认配置）在独立演示环境里渲染；「通知类型」是分段选择器，每行的说明在鼠标停在标题文字上时才出现，所以这里只看到标题。
 </details>
 
 ## 安装
@@ -117,7 +117,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 ### 提醒方式
 
 - **启用提醒** 总开关：关闭后不弹通知、不响提示音，也不改标签页标题；
-- **提醒方式（二选一）**：系统通知 / 页面浮层，单选，开了这个就不再弹那个；
+- **通知类型（二选一）**：一行分段选择器，左边「系统通知」、右边「浮层提醒」，点哪个就只走哪个；
   - **系统通知**（默认）：进 Windows / macOS 通知中心，需要通知权限；
   - **页面浮层**：在 DSH 页面角落画提醒卡片，窗口在哪块屏它就在哪块屏——系统通知只会画在主屏，主屏不看时用它；不需要通知权限，桌面端也能在卡片上直接「同意 / 拒绝」。选中后可在该行点开选四个角落的位置，见[副屏与浮层提醒](#副屏与浮层提醒)；
 - **提示音 / 音量**：开关直接切；音量滑块收在该行里，点一下标题（▸ 变成 ▾）展开。具体播什么由「高级设置 → 音效来源」决定；
@@ -133,7 +133,7 @@ Windows 的系统通知横幅固定画在主屏上，系统没有设置项、浏
 - **不需要通知权限**：通知权限没给、或桌面端弹不出带按钮的通知时，浮层照常工作；
 - **审批卡片带「同意 / 拒绝」**：与审批卡片的「允许一次 / 拒绝」等价，桌面端也能用（不依赖 Service Worker）；点卡片正文则切回对应对话；
 - **停留时间**：普通提醒 5 秒自动收起，带「同意 / 拒绝」的审批卡片 12 秒，系统通知同档（普通 5 秒、带按钮 12 秒）；也可以点卡片或右上角叉提前关掉。最多同时叠 4 张；
-- **与系统通知的关系**：二选一。以前两个开关可以同开，结果同一条提醒弹两遍、还互相挡住，1.10.0 起改成单选。老配置里开着浮层的，升级后自动落到浮层。
+- **与系统通知的关系**：二选一。以前两个开关可以同开，结果同一条提醒弹两遍、还互相挡住；1.10.0 起改成单选，1.10.2 起做成一行分段选择器。老配置里开着浮层的，升级后自动落到浮层。
 
 浮层只知道窗口在哪块屏，不知道你人在看哪块屏。窗口留在主屏、人却盯着副屏时，它同样看不见。
 

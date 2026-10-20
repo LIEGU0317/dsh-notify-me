@@ -1,7 +1,7 @@
 {
   "name": "dsh-notify-me",
-  "version": "1.8.0",
-  "description": "DSH 桌面消息提醒插件：模型需要你操作（审批/方案确认/提问的可操作提醒）或回复在后台完成时，系统通知+提示音+标签页标题提醒你；权限审批的通知上可直接点「同意/拒绝」完成裁决；可把提醒转发到 Discord Webhook / Bark / Gotify / 自定义 Webhook 等外部通知；可选页面内浮层提醒（跟着 DSH 窗口落在你正在看的那块屏，桌面端也能在浮层上直接裁决），可在设置页开关并切换通知语言。Desktop notification & message alerts for DeepSeek Harness web — toasts, sounds and a tab-title marker when the agent needs your input (approval / plan review / question) or a reply finishes in the background, Approve/Reject buttons on approval toasts to decide right from the notification, forwarding to external webhooks (Discord / Bark / Gotify / custom); an optional in-page overlay alert that follows the window to its display (and carries working Approve/Reject buttons on Desktop); toggleable from Settings with zh/en notification language.",
+  "version": "1.9.0",
+  "description": "离开 DSH 页面也能收到提醒：需要你操作 / 后台回复完成时发系统通知、标题标记与可选页面浮层（副屏也能看见），支持审批快捷裁决与外部推送。Brand icon and a reworked settings page in 1.9.0.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

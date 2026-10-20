@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="dsh-notify-me">
+  <title>dsh-notify-me</title>
+  <!-- Bell: one dome, one flared foot, no interior detail so it holds at 16px. -->
+  <path d="M12 3.4a5.1 5.1 0 0 0-5.1 5.1v3.1c0 .9-.3 1.7-.9 2.4l-1.1 1.3c-.5.6-.1 1.5.7 1.5h12.8c.8 0 1.2-.9.7-1.5l-1.1-1.3a3.8 3.8 0 0 1-.9-2.4V8.5A5.1 5.1 0 0 0 12 3.4Z"/>
+  <path d="M9.8 19.2a2.4 2.4 0 0 0 4.4 0"/>
+  <!-- The wait: one unread mark, filled so it survives downscaling. -->
+  <circle cx="18.3" cy="5.3" r="2.35" fill="currentColor" stroke="none"/>
+</svg>

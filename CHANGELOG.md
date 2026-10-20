@@ -12,6 +12,27 @@ All notable changes to **dsh-notify-me** are documented here.
 ### 测试
 - `npm test` 两套件在 0.2.1-rc.2 的 cordis 4.0.5 上通过（`smoke/smoke-test.cjs` 与真 cordis 腿 `smoke/cordis-host-test.mjs`）。
 
+## [1.9.0] — 2026-10-20
+
+### 新增
+
+- **品牌标志**：`docs/brand/` 收录 24px 线稿、512→32px 应用图标、favicon 与总览图。母题是「铃铛 + 未读圆点」，设置页页眉直接用线稿版内联渲染（不依赖静态资源）。
+
+### 变更
+
+- **设置页重新排版**：页眉（标志 + 一句话说明）之后按「提醒方式 → 什么时候提醒 → 试一试」三段排开，音效来源、外部推送、运行环境与诊断收进折叠的「高级设置」，高级设置右侧列出内含项。原来六张卡片平铺、每行 hint 三四行的样子不再有。
+- 每一行的说明压到一到两行，只讲一件事；「音量」作为「提示音」的附属行缩进显示，「位置」作为「页面浮层提醒」的附属行缩进显示。
+- README 中英双语同步重排，设置章节与截图换成 1.9.0 的实拍整页图（`docs/screenshots/settings-zh.png` / `settings-en.png`）。
+
+### 说明
+
+- 插件对 DSH 侧仍然只用 `__ModuleLoader__.load`、`settings.section`、`locale` 三个既有面，1.9.0 没有引入任何新的宿主 API：**0.1.1-rc.2 → 0.2.1-rc.2 的插件条目照旧兼容**，退回旧宿主不需要改配置。
+- 设置左侧导航行的图标由宿主按分区 id 硬编码（只认 account / models / agent-presets / plugins / archived-sessions），`settings.section` 没有图标字段，插件换不了，已在「已知限制」写明。
+
+### 测试
+
+- smoke 增补：重排后的控件仍能按 `aria-label` 定位；「高级设置」折叠态默认收起、`settingsBoot({ advanced: true })` 展开后能继续走到音效与外部推送；浮层位置下拉仍在默认可见区。
+
 ## [1.8.0] — 2026-10-20
 
 ### 新增

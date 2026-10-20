@@ -1882,6 +1882,17 @@ function settingsBoot(seedConfig, seedSound, opts) {
     fn(node);
     if (node.children) for (const c of node.children) walk(c, fn);
   };
+  const pressAria = (aria) => {
+    let hit = null;
+    walk(tree, (n) => { if (!hit && n.props && n.props['aria-label'] === aria) hit = n; });
+    assert(hit, 'no rendered control labelled ' + aria);
+    hit.props.onClick();
+    render();
+  };
+  // The page collapses its rarely-touched half (sound sources, external
+  // forwarding, runtime) behind one toggle; tests that assert on those rows
+  // have to open it the way a user would.
+  if (opts && opts.advanced) pressAria((dict && dict.zh.advanced) || '高级设置');
   return {
     text: collectText(tree).join(' | '),
     get tree() { return tree; },
@@ -1899,13 +1910,7 @@ function settingsBoot(seedConfig, seedSound, opts) {
     configNow: () => b.win.__dshNotifyMe.config,
     // Press the exact control the user presses, then re-render the way React
     // would, so the feedback the press produced is readable.
-    press: (aria) => {
-      let hit = null;
-      walk(tree, (n) => { if (!hit && n.props && n.props['aria-label'] === aria) hit = n; });
-      assert(hit, 'no rendered control labelled ' + aria);
-      hit.props.onClick();
-      render();
-    },
+    press: pressAria,
     cleanup: () => { for (const c of [...host.cleanups]) c(); },
   };
 }
@@ -1916,7 +1921,7 @@ function settingsSoundRows() {
   const boot = settingsBoot;
 
   // 1) defaults: both kinds expose the source selector, no file picker yet.
-  const base = boot();
+  const base = boot(null, null, { advanced: true });
   assert(base.text.indexOf('音效来源') !== -1, 'the sound-source header renders');
   assert(base.text.indexOf('「回复完成」的声音') !== -1, 'the done-kind row renders');
   assert(base.text.indexOf('「需要你」的声音') !== -1, 'the attention-kind row renders');
@@ -1930,7 +1935,7 @@ function settingsSoundRows() {
 
   // 2) custom with a file stored: the picker row appears and names the file, so
   //    "which file is this actually playing" is answerable from the page.
-  const custom = boot({ soundDone: 'custom' }, { name: 'Windows Notify System Generic.wav', size: 193940, data: PICKED_WAV });
+  const custom = boot({ soundDone: 'custom' }, { name: 'Windows Notify System Generic.wav', size: 193940, data: PICKED_WAV }, { advanced: true });
   assert(custom.text.indexOf('选择音频文件') !== -1, 'the file picker appears for the custom source');
   assert(custom.text.indexOf('Windows Notify System Generic.wav') !== -1, 'the stored file is named on the page');
   assert(custom.text.indexOf(Math.round(193940 / 1024) + ' KB') !== -1, 'the stored file size is shown');
@@ -1938,7 +1943,7 @@ function settingsSoundRows() {
 
   // 3) custom with nothing stored still renders (and says so) rather than
   //    collapsing the row.
-  const empty = boot({ soundAttention: 'custom' });
+  const empty = boot({ soundAttention: 'custom' }, null, { advanced: true });
   assert(empty.text.indexOf('选择音频文件') !== -1, 'the picker renders before any file is picked');
   assert(empty.text.indexOf('尚未选择文件') !== -1, 'the empty state is spelled out');
   empty.cleanup();
@@ -1946,7 +1951,7 @@ function settingsSoundRows() {
   // 4) pressing the "system" row's preview must not be a silent no-op: there is
   //    no plugin cue to play in that mode, so the button has to raise a real,
   //    un-silenced test alert instead (otherwise it reads as broken).
-  const sys = boot({ soundDone: 'system' }, null, { withNotification: true, withAudio: true });
+  const sys = boot({ soundDone: 'system' }, null, { withNotification: true, withAudio: true, advanced: true });
   sys.press('试听「回复完成」音效');
   assert(sys.audio.tones.length === 0, 'the system preview plays no built-in tone');
   assert(sys.lastNotification(), 'the system preview raised a toast');
@@ -2174,7 +2179,7 @@ async function settingsExternalRows() {
   const flush = () => new Promise((r) => setImmediate(r));
 
   // 1) defaults: the card renders, nothing is on, the empty state is spelled out.
-  const base = settingsBoot();
+  const base = settingsBoot(null, null, { advanced: true });
   assert(base.text.indexOf('外部通知') !== -1, 'the external card header renders');
   assert(base.text.indexOf('转发外部通知') !== -1, 'the master switch row renders');
   assert(base.text.indexOf('转发「需要你」') !== -1 && base.text.indexOf('转发「回复完成」') !== -1,
@@ -2185,7 +2190,7 @@ async function settingsExternalRows() {
   base.cleanup();
 
   // 2) a seeded target renders its URL in the input and the privacy note.
-  const seeded = settingsBoot({ externalEnabled: true, externalTargets: [{ id: 't1', type: 'bark', url: 'https://api.day.app/KEY' }] });
+  const seeded = settingsBoot({ externalEnabled: true, externalTargets: [{ id: 't1', type: 'bark', url: 'https://api.day.app/KEY' }] }, null, { advanced: true });
   const urlInput = seeded.find((n) => n.props && n.props['aria-label'] === '推送地址');
   assert(urlInput && urlInput.props.value === 'https://api.day.app/KEY', 'the seeded URL lands in the input');
   assert(seeded.text.indexOf('只填你自己信任的端点') !== -1, 'the privacy note renders once a target exists');
@@ -2226,7 +2231,7 @@ async function settingsExternalRows() {
   const test = settingsBoot(
     { enabled: true, externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] },
     null,
-    { fetch: (url, opts) => { calls.push({ url, opts: opts || {} }); return Promise.resolve({ ok: true, status: 204 }); } }
+    { advanced: true, fetch: (url, opts) => { calls.push({ url, opts: opts || {} }); return Promise.resolve({ ok: true, status: 204 }); } }
   );
   test.press('测一测外部通知');
   assert(test.textNow().indexOf('发送中') !== -1, 'the test button reports progress in flight');
@@ -2242,7 +2247,7 @@ async function settingsExternalRows() {
   const off = settingsBoot(
     { enabled: true, externalEnabled: false, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] },
     null,
-    { fetch: (url) => { offCalls.push(String(url)); return Promise.resolve({ ok: true, status: 204 }); } }
+    { advanced: true, fetch: (url) => { offCalls.push(String(url)); return Promise.resolve({ ok: true, status: 204 }); } }
   );
   off.press('测一测外部通知');
   assert(off.textNow().indexOf('先打开「转发外部通知」') !== -1, 'master-off gets a hint');
@@ -2250,7 +2255,7 @@ async function settingsExternalRows() {
   off.cleanup();
 
   const none = settingsBoot({ enabled: true, externalEnabled: true }, null,
-    { fetch: () => Promise.resolve({ ok: true, status: 204 }) });
+    { advanced: true, fetch: () => Promise.resolve({ ok: true, status: 204 }) });
   none.press('测一测外部通知');
   assert(none.textNow().indexOf('先添加至少一个推送目标') !== -1, 'no-target gets a hint');
   none.cleanup();

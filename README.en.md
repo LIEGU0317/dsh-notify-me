@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/brand/icon-app-128.png" width="76" height="76" alt="dsh-notify-me">
+
 # dsh-notify-me
 
 **Step away from DSH and know when to come back.**
@@ -11,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
-[![Client bundle size](https://img.shields.io/badge/client-%7E152%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E156%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.1--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -43,10 +45,9 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 <details>
 <summary>See the settings interface</summary>
 
-![Notification settings: master switch, environment, notifications, and conversation rules](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-en.jpg)
+![The Notify me settings page: header, how you get told, when to alert, try it, and the collapsed Advanced block](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-en.png)
 
-The real plugin settings component rendered with v1.7.0 defaults in an isolated demo environment. Shows the basic settings area, without the DSH host shell (the two overlay rows added in 1.8.0 are not in this shot).
-
+The real settings component (v1.9.0 defaults) rendered full-page in a standalone demo shell; the sidebar is kept for context, it is not the DSH shell.
 </details>
 
 ## Installation
@@ -115,31 +116,15 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 
 ## Configure it from DSH Settings
 
-Open **Settings → Notify me**. Common options are grouped below.
+Open **Settings → Notify me**. The page runs as how you get told, when to alert, and a try-it block; the knobs you rarely touch fold into **Advanced** at the bottom.
 
-### Basics
+### How you get told
 
-- **Enable reminders** — master switch; when off, no toasts, no sounds and the tab title is never touched;
-- **System notifications / Sound / Volume** — toast toggle, cue toggle and a volume slider;
-- **In-page overlay** (default off; independent of "System notifications", both can be on) — draws the alert card inside the DSH page, positioned with the window; see [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
-- **Notification language** — follow the interface / 简体中文 / English: controls the language of the alert text and the `🔔 …` title marker;
-- **Test buttons** — send one "needs you", "reply finished" or "approval buttons" test alert with the current settings (**not** limited by the "while the page is open" toggles; the "needs you" test's title marker clears itself after ~6s);
-- **Version info** — the settings page always shows the installed plugin version at its foot (`dsh-notify-me v…`); quote that line in bug reports or to check which build you are on.
-
-### Timing and click behavior
-
-- **"Needs you" alerts while the page is open** (default on) and **"Reply finished" alerts while the page is open** (default off);
-- **Stay quiet for the conversation on screen** (default on): a wait inside the conversation you are looking at keeps only the tab marker — no toast or sound landing on the approval card. Backgrounding the page puts that alert back at once, unless you already handled it. Waits in other background sessions are unaffected;
-- **Ignore subagent sessions** (default on): background subagent child sessions raise neither "needs you" nor "reply finished" — those are steps of the parent conversation's turn, and the parent's own alert already covers them. The subagent session you have open alerts as usual. Turn it off to alert for every session;
-- **Decide approvals from the toast** (default on): approval notifications carry Approve / Reject buttons, and one click settles the request exactly like the Allow once / Reject buttons on the approval card. Clicking the toast body still takes you back to the conversation. **Desktop toasts have no buttons** (`dsh-app://` pages cannot register a Service Worker); turn on the in-page overlay to decide from the overlay instead, and the settings page states which channel can offer buttons;
-
-<details>
-<summary>Environment, conversation navigation, and multiple windows</summary>
-
-- **Environment** (auto-detect by default) — identifies Web vs Desktop (DSH Desktop, `dsh-app://`) from the page protocol, with a manual override for hosts where detection comes out wrong: on the Desktop a toast click rides the `dsh://` deep link to raise the window and quick-decision buttons are unavailable; on the Web it is `window.focus()` plus the Service Worker bridge. Whenever the override disagrees with detection, the settings page says what detection saw;
-- **Click a toast to open that conversation** (default on): clicking brings DSH to the front and switches to the conversation the alert came from. With several DSH tabs open, one click raises exactly one window (a visible one first) and switches only that one — the others stay put; when off, clicking a toast does nothing. On the Desktop (DSH Desktop) the click likewise raises the window and switches conversations: page-side `window.focus()` cannot raise a native Electron window, so since 1.5.2 the plugin rides the app's own `dsh://open` deep link instead (a window hidden to the tray comes back too);
-
-</details>
+- **Enable reminders**: master switch — off means no toasts, no sounds, and the tab title is left alone;
+- **System notifications** (on by default): native toasts through the browser, landing in the Windows / macOS notification center;
+- **In-page overlay** (off by default): cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. Runs alongside toasts; pick one of four corners when expanded. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
+- **Sound / Volume**: master cue switch and a volume slider; what it plays comes from Advanced → Alert sound;
+- **Decide approvals from the toast** (on by default): approval toasts carry Approve / Reject that settle the request in place. **Desktop notifications have no buttons** (`dsh-app://` cannot register a Service Worker) — leave the overlay on instead; the page states plainly which channel can carry buttons right now.
 
 ### Secondary displays and the overlay
 
@@ -154,6 +139,24 @@ The **in-page overlay** skips the notification center and draws the card inside 
 - **Relation to system notifications** — the two switches are independent. With both on, the primary display gets toasts and the second screen gets the overlay; the overlay alone is also a valid setup.
 
 The overlay only knows which screen the window is on, not which screen you are looking at. If the window stays on the primary display while you watch another one, it stays invisible — same as a toast.
+
+### When to alert
+
+- **Also alert "needs you" while the page is open** (on): turn it off to hear only from the background;
+- **Stay quiet for the conversation on screen** (on): a wait belonging to the conversation you are looking at keeps only the tab marker so the approval card stays readable; backgrounding restores alerts;
+- **Also alert "reply finished" while the page is open** (off): by default only background finishes alert;
+- **Ignore subagent sessions** (on): skip background sessions spawned by a subagent — the parent conversation covers them; the one you have open still alerts;
+- **Click a toast to open that conversation** (on): the click brings DSH forward and switches conversation; with several tabs open only one is raised, and off means a click does nothing. Desktop window-raising details live in [Runtime & diagnostics](#runtime--diagnostics).
+
+### Try it
+
+Three buttons send one "needs you", one "reply finished" and one "approval buttons" test alert with the current settings — deliberately not limited by the switches above. A line underneath states which channel can carry approval buttons right now.
+
+The plugin version sits at the bottom of the page (`dsh-notify-me v…`) — copy that line when reporting a bug or checking whether an update landed.
+
+### Advanced
+
+Collapsed by default. It holds the three things you rarely touch: alert sounds, external forwarding, and runtime & diagnostics — each documented below.
 
 ### Sound
 
@@ -176,6 +179,21 @@ Off by default. Supports Discord Webhook / Bark / Gotify / custom webhooks. Aler
 - **External notifications** (default off) — forward each alert to your own push endpoints as well, so it reaches you away from the machine: **Discord Webhook** / **Bark** / **Gotify** / **custom webhook**, any number of targets, each with a type and URL (Discord takes the webhook URL; Bark `https://api.day.app/<device key>`; Gotify `https://<server>/message?token=<app token>`; a custom endpoint receives one POST of JSON: `{source, event, title, body, sessionId, time}`). "Forward 'needs you'" and "Forward 'reply finished'" switch independently; **Send test notification** sends one test message to every target (not limited by those two switches, and never pretending to be a real alert). Forwarding follows exactly the same trigger rules as local alerts ("stay quiet for the conversation on screen" and friends apply to it too); the alert text is sent as-is to the addresses you fill in, so **only use endpoints you trust**;
 
 </details>
+
+### Runtime & diagnostics
+
+The last block inside Advanced. The page protocol is detected automatically to tell Web from Desktop (`dsh-app://`); override it by hand if detection is wrong — Desktop clicks raise the window through the `dsh://` deep link and carry no quick-decision buttons, while Web uses `window.focus()` plus the Service Worker bridge. When the override disagrees with detection the page says so.
+
+<details>
+<summary>Alert language, Desktop window raising, reset</summary>
+
+- **Alert language**: follow the UI / Simplified Chinese / English — governs alert copy and the `🔔 …` title marker;
+- **How the Desktop window is raised**: `window.focus()` cannot lift a native Electron window, so since 1.5.2 the page drives the app's own `dsh://open` deep link — it works even when the window is parked in the tray;
+- **Reset settings**: restores every switch and cue setting to the factory defaults (webhook targets and chosen audio files are kept).
+
+</details>
+
+> The settings sidebar icon is rendered by the DSH settings shell: it hard-codes icons per section id (account / models / agent-presets / plugins / archived-sessions) and gives every other section the default gear — `settings.section` has no icon field, so the plugin's bell can only appear inside its own page.
 
 > Notification permission is required: click once on the page → **Allow** (or address-bar lock → Site settings → Notifications → Allow → reload). On macOS, also allow the browser under System Settings → Notifications.
 
@@ -213,6 +231,8 @@ The ranges are illustrative: the plugin picks its source by store shape (wheneve
 Two traps are worth remembering: a package listed in `dsh.client.inject` that a newer runtime no longer ships parks the client entry at `pending (waiting for services: …)` forever — which is what broke 1.1.3 on `0.1.2-rc.1` and later; and when the host renames a store or a field nothing throws, alerts just go **silent** — `0.2.0-rc.2` moved `pendingInteractions`→`sessionStatus`, `list.current`→`retainedBy.mainView` and `sessions.open()`→`uiWorkspace.openSession()`. So every adaptation must confirm `window.__dshNotifyMe.debug()` reports `bound` and which source answered. `0.2.1-rc.2` changed neither: `sessionStatus` is still a Map of `{running, pendingInteraction, completionUnread}`, `uiWorkspace.openSession(id)` is unchanged, and the session list still has no `current`.
 
 </details>
+
+`1.9.0` neither widens nor narrows that range: the settings page is plain React rendering over the existing CSS variables (every colour carries a fallback) and adds no host API. The overlay, title markers and window raising still go through the 1.7 / 1.8 paths, so **plugin entries stay compatible from 0.1.1-rc.2 through 0.2.1-rc.2**, and stepping back to an older host needs no config change. The only new surface is visual: the bell in the page header is the plugin's own SVG (`docs/brand/`).
 
 ## Advanced: console configuration
 
@@ -301,6 +321,8 @@ Verified on the real shell (DSH Desktop 0.2.0-rc.2, three rounds of retesting in
 - The title marker is written into `document.title` alongside the host: when the host recomputes the title it can overwrite the marker until the next alert event rewrites it.
 - "Stay quiet for the conversation on screen" is judged by `document.hidden`: a window fully covered by other apps still counts as visible, so waits in the current conversation stay quiet there too.
 - External notification forwarding is subject to browser CORS rules: an endpoint that does not allow cross-origin requests falls back to a "sent but unverifiable" delivery (no-cors) and is reported honestly as such; Discord webhooks do allow cross-origin, so delivery to them is confirmed. HTTP errors are recorded as failures and never blindly retried. Forwarding runs only after the local alert has decided to fire, so anything the rules silence is never sent out.
+
+- **The settings sidebar row keeps the host's default gear icon**: the settings shell hard-codes icons per section id, gives every other section the default gear, and `settings.section` exposes no icon field — the plugin cannot change it. Its own bell only appears inside the settings page and in this README.
 
 ## Development
 

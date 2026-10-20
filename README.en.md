@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
-[![Client bundle size](https://img.shields.io/badge/client-%7E166%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E168%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.1--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -26,7 +26,7 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 - **When input is needed:** approval, plan review, and questions trigger notifications, sound, and a title marker.
 - **When a background reply finishes:** return to the result; click the notification to open its conversation.
 - **When you leave your computer:** optionally forward alerts to Discord, Bark, Gotify, or your own webhook.
-- **When you do not watch the primary display:** an optional in-page overlay follows the DSH window onto whichever screen you are looking at (system notifications only ever appear on the primary display).
+- **When you do not watch the primary display:** switch the alert channel to the in-page overlay — it follows the DSH window onto whichever screen you are looking at (system notifications only ever appear on the primary display).
 
 > Keep the page or desktop app running; backgrounding / minimizing is fine. System notifications require permission. Approval buttons need a Service Worker capable Web environment (such as `http://127.0.0.1` or `https`); Desktop notifications have no buttons — turn on the in-page overlay to decide from there instead (see [Secondary displays and the overlay](#secondary-displays-and-the-overlay)).
 
@@ -47,7 +47,7 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 
 ![The Notify me settings page: header, how you get told, when to alert, try it, and the collapsed Advanced block](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-en.png)
 
-The real settings component (v1.9.2 defaults) rendered as the content column in a standalone demo shell. Row explanations now live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
+The real settings component (v1.10.0 defaults) rendered in a standalone demo shell. The alert channel is a single choice, and row explanations live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
 </details>
 
 ## Installation
@@ -121,10 +121,11 @@ Open **Settings → Notify me**. The page runs as how you get told, when to aler
 ### How you get told
 
 - **Enable reminders**: master switch — off means no toasts, no sounds, and the tab title is left alone;
-- **System notifications** (on by default): native toasts through the browser, landing in the Windows / macOS notification center;
-- **In-page overlay** (off by default): cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. Runs alongside toasts; pick one of four corners when expanded. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
+- **How you get told (pick one)**: system notifications or the in-page overlay — a single choice, so turning one on turns the other off;
+  - **System notifications** (default): native toasts landing in the Windows / macOS notification center; needs notification permission;
+  - **In-page overlay**: cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. Pick one of four corners when it is the chosen channel. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
 - **Sound / Volume**: master cue switch and a volume slider; what it plays comes from Advanced → Alert sound;
-- **Decide approvals from the toast** (on by default): approval toasts carry Approve / Reject that settle the request in place. **Desktop notifications have no buttons** (`dsh-app://` cannot register a Service Worker) — leave the overlay on instead; the page states plainly which channel can carry buttons right now.
+- **Decide approvals from the toast** (on by default): approval toasts carry Approve / Reject that settle the request in place. **Desktop notifications have no buttons** (`dsh-app://` cannot register a Service Worker) — pick the in-page overlay as the channel instead; the page states plainly which channel can carry buttons right now.
 
 ### Secondary displays and the overlay
 
@@ -135,8 +136,8 @@ The **in-page overlay** skips the notification center and draws the card inside 
 - **Position** — top right / bottom right / top left / bottom left, default bottom right; changes apply immediately;
 - **No notification permission needed** — it works when permission was never granted, and on the Desktop shell where buttonless toasts are all the OS channel can do;
 - **Approval cards carry Approve / Reject** — the same decision as Allow once / Reject on the approval card, and they work on the Desktop too (no Service Worker involved). Clicking the card body opens its conversation;
-- **Lifetime** — "needs you" cards retire after 20s, "reply finished" after 8s; an approval card with buttons stays until it is decided or closed. At most 4 cards stack at once;
-- **Relation to system notifications** — the two switches are independent. With both on, the primary display gets toasts and the second screen gets the overlay; the overlay alone is also a valid setup.
+- **Lifetime** — "needs you" cards retire after 12s, "reply finished" after 6s, and an approval card with buttons after 18s; a card or its close button retires one earlier. At most 4 cards stack at once;
+- **Relation to system notifications** — it is one or the other. Both used to be switchable at once, which meant every alert arrived twice and the pair covered each other; 1.10.0 makes it a single choice, and an old config with the overlay on migrates to it.
 
 The overlay only knows which screen the window is on, not which screen you are looking at. If the window stays on the primary display while you watch another one, it stays invisible — same as a toast.
 
@@ -200,7 +201,7 @@ The last block inside Advanced. The page protocol is detected automatically to t
 ## How it alerts
 
 - **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; supported Web environments offer approval buttons, Desktop does not)
-- **In-page overlay** (optional, default off) — an alert card drawn in the corner of the DSH page, on whatever display the window is on, optionally with Approve / Reject buttons; see [Secondary displays and the overlay](#secondary-displays-and-the-overlay)
+- **In-page overlay** — an alert card drawn in the corner of the DSH page, on whatever display the window is on, optionally with Approve / Reject buttons; see [Secondary displays and the overlay](#secondary-displays-and-the-overlay)
 - **Sound** — WebAudio beeps by default (distinct patterns for "needs you" vs "done"); each kind can instead play a picked audio file, or hand the sound over to the operating system's own notification sound
 - **Tab title marker** — while something is waiting on you, the tab title is prefixed with `🔔 Action needed · …` / `🔔 需要你 · …`; while a background session is **finished but unread**, with `✅ Reply finished · …` / `✅ 回复完成 · …`, gone once you open that session (or it starts running again). Both kinds can be up together, "needs you" first; a host title change is rebased under the markers
 - **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / custom webhook — so the push channel on your phone picks it up while you step away from the machine
@@ -250,14 +251,14 @@ window.__dshNotifyMe.setConfig({
   currentHiddenOnly: true,    // true = waits in the conversation on screen keep only the tab marker (replayed once backgrounded)
   doneHiddenOnly: true,       // false = also alert "reply finished" while visible
   ignoreSubagent: true,       // true = never alert for background subagent sessions (the open one is exempt)
-  toast: true,                // system-notification toggle
+  channel: "toast",          // alert channel: 'toast' system notification | 'overlay' in-page card, pick one
   sound: true,                // cue toggle (also governs the "system notification sound" mode)
   soundDone: "synth",         // "reply finished" cue source: 'synth' built-in | 'custom' picked file | 'system' OS sound
   soundAttention: "synth",    // "needs you" cue source, same values
   volume: 0.5,                // 0..1
   autoFocus: true,            // clicking a toast opens the conversation it came from
   quickActions: true,         // Approve / Reject buttons on approval toasts
-  overlay: false,             // in-page overlay alert (follows the DSH window to its display; no notification permission needed)
+  overlay: false,             // legacy mirror kept in sync with channel (old configs migrate through it)
   overlayCorner: "bottom-right", // overlay anchor: 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left'
   externalEnabled: false,     // external-notification forwarding master switch (default off: no endpoint, nothing is sent)
   externalAttention: true,    // forward "needs you" (exactly the same trigger rules as local alerts)

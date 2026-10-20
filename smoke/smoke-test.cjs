@@ -2437,13 +2437,46 @@ function overlayChannel() {
   assert(d.overlay.enabled === true && d.overlay.corner === 'top-right' && d.overlay.cards === 1,
     'debug reports the live overlay state, got ' + JSON.stringify(d.overlay));
 
+  // 10) One channel at a time: the overlay stays silent while toasts are the
+  //     chosen channel, and a toast is raised only when it is chosen.
+  const ex = boot({ withNotification: true });
+  const exApi = ex.win.__dshNotifyMe;
+  exApi.setConfig({ enabled: true, channel: 'overlay' });
+  exApi.test('attention');
+  assert(ex.lastNotification() === null, 'the overlay channel raises no system notification');
+  assert(layer() && cards().length === 1, 'the overlay channel still draws its card');
+  exApi.setConfig({ channel: 'toast' });
+  assert(!layer(), 'switching to toasts clears the overlay layer');
+  exApi.test('attention');
+  assert(!!ex.lastNotification(), 'the toast channel raises a system notification');
+
+  // 11) An approval card is not immortal: an unanswered one fades on its own
+  //     schedule instead of camping in the corner (the toast path behaves the
+  //     same way, see showToast's close timer).
+  const delays = [];
+  const timed = bootBundle({
+    extend(sandbox) {
+      dom = installFakeDom(sandbox);
+      sandbox.setTimeout = (fn, ms) => { delays.push({ fn, ms }); return 0; };
+      sandbox.clearTimeout = () => {};
+    },
+  });
+  const tapi = timed.win.__dshNotifyMe;
+  tapi.setConfig({ channel: 'overlay', enabled: true });
+  tapi.test('approval');
+  assert(cards().length === 1, 'the approval card is up');
+  const actionTimer = delays.filter((d) => d.ms === 18000);
+  assert(actionTimer.length === 1, 'an actionable card arms a 18s fade, got ' + JSON.stringify(delays.map((d) => d.ms)));
+  actionTimer[0].fn();
+  assert(cards().length === 0, 'the actionable card dismisses itself when its timer fires');
+
   console.log('overlay OK: default off, one card per alert, corner + cap + dismissal, approval buttons settle without a worker');
 }
 
 function settingsOverlayRows() {
-  console.log('\n— settings page: in-page overlay rows —');
+  console.log('\n\u2014 settings page: alert channel choice \u2014');
   const base = settingsBoot();
-  assert(base.text.indexOf('页面浮层提醒') !== -1, 'the overlay switch renders');
+  assert(base.text.indexOf('页面浮层提醒') !== -1, 'the overlay channel row renders');
   assert(base.text.indexOf('系统通知只会出现在主屏') !== -1, 'the hint explains why the overlay exists');
   // The explanation hangs off the label text only — hovering a switch or a
   // slider must not pop a box the user did not ask for.
@@ -2456,29 +2489,44 @@ function settingsOverlayRows() {
   const rowTips = base.findAll((n) => /(^| )dnm-row( |$)/.test(String((n.props && n.props.className) || ''))
     && String(n.props.className).indexOf('dnm-rowTip') !== -1);
   assert(rowTips.length === 0, 'no whole row is a tooltip target');
-  const sw = base.find((n) => n.props && n.props['aria-label'] === '页面浮层提醒');
-  assert(sw && sw.props['aria-checked'] === 'false', 'the overlay switch starts off');
+
+  // The two channels are a single choice, so they render as radios.
+  const radios = base.findAll((n) => n.props && n.props.type === 'radio');
+  assert(radios.length === 2, 'exactly two radios pick the alert channel, got ' + radios.length);
+  const toastRadio = base.find((n) => n.props && n.props.type === 'radio' && n.props['aria-label'] === '系统通知');
+  const overlayRadio = base.find((n) => n.props && n.props.type === 'radio' && n.props['aria-label'] === '页面浮层提醒');
+  assert(toastRadio && toastRadio.props.checked === true, 'system notifications are the default channel');
+  assert(overlayRadio && overlayRadio.props.checked === false, 'the overlay starts unselected');
   assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
     'no corner select while the overlay is off');
+
   base.press('页面浮层提醒');
-  assert(base.configNow().overlay === true, 'toggling the overlay switch persists');
+  assert(base.configNow().channel === 'overlay' && base.configNow().overlay === true,
+    'picking the overlay persists the channel, got ' + JSON.stringify(base.configNow().channel));
+  assert(base.configNow().toast === false, 'the legacy mirrors follow the channel');
   const corner = base.find((n) => n.props && n.props['aria-label'] === '浮层位置');
   assert(corner && corner.props.value === 'bottom-right', 'the corner select appears with the default');
   assert(base.textNow().indexOf('左下') !== -1, 'the corner options are localized');
   corner.props.onChange({ currentTarget: { value: 'top-left' } });
   assert(base.configNow().overlayCorner === 'top-left', 'corner edits land in config');
-  base.press('页面浮层提醒');
-  assert(base.configNow().overlay === false, 'the switch turns back off');
+
+  base.press('系统通知');
+  assert(base.configNow().channel === 'toast' && base.configNow().overlay === false,
+    'picking system notifications switches the channel back');
+  assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
+    'the corner select disappears again');
   base.cleanup();
 
-  // With the overlay on, the quick-decision hint points at the overlay buttons
-  // instead of claiming they are unavailable.
-  const on = settingsBoot({ overlay: true });
-  assert(on.text.indexOf('浮层上的「同意」同样等价于') !== -1, 'the approval-equivalence note renders');
-  assert(on.text.indexOf('快捷裁决按钮暂不可用') === -1, 'the overlay no longer reports buttons as unavailable');
-  on.cleanup();
+  // A config written before the channel existed keeps its overlay setting.
+  const migrated = settingsBoot({ overlay: true });
+  assert(migrated.configNow().channel === 'overlay', 'a legacy overlay:true config migrates to the channel');
+  assert(migrated.text.indexOf('浮层上的「同意」同样等价于') !== -1,
+    'the approval-equivalence note renders');
+  assert(migrated.text.indexOf('快捷裁决按钮暂不可用') === -1,
+    'the overlay no longer reports buttons as unavailable');
+  migrated.cleanup();
 
-  console.log('overlay settings rows OK: switch, corner select, copy, honest button hint');
+  console.log('channel rows OK: two exclusive radios, corner select only for the overlay, honest button hint');
 }
 
 (async () => {

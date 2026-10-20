@@ -2465,8 +2465,8 @@ function overlayChannel() {
   tapi.setConfig({ channel: 'overlay', enabled: true });
   tapi.test('approval');
   assert(cards().length === 1, 'the approval card is up');
-  const actionTimer = delays.filter((d) => d.ms === 18000);
-  assert(actionTimer.length === 1, 'an actionable card arms a 18s fade, got ' + JSON.stringify(delays.map((d) => d.ms)));
+  const actionTimer = delays.filter((d) => d.ms === 12000);
+  assert(actionTimer.length === 1, 'an actionable card arms a 12s fade, got ' + JSON.stringify(delays.map((d) => d.ms)));
   actionTimer[0].fn();
   assert(cards().length === 0, 'the actionable card dismisses itself when its timer fires');
 
@@ -2504,8 +2504,18 @@ function settingsOverlayRows() {
   assert(base.configNow().channel === 'overlay' && base.configNow().overlay === true,
     'picking the overlay persists the channel, got ' + JSON.stringify(base.configNow().channel));
   assert(base.configNow().toast === false, 'the legacy mirrors follow the channel');
+  // The corner control is folded away: the row has to be clicked open first.
+  const expand = (key) => {
+    const node = base.find((n) => n.props && n.props['data-dnm-expand'] === key);
+    assert(node, 'the row exposes an expand toggle: ' + key);
+    node.props.onClick();
+    base.renderNow();
+  };
+  assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
+    'the corner select stays folded until the row is opened');
+  expand('overlayCorner');
   const corner = base.find((n) => n.props && n.props['aria-label'] === '浮层位置');
-  assert(corner && corner.props.value === 'bottom-right', 'the corner select appears with the default');
+  assert(corner && corner.props.value === 'bottom-right', 'opening the row reveals the corner select');
   assert(base.textNow().indexOf('左下') !== -1, 'the corner options are localized');
   corner.props.onChange({ currentTarget: { value: 'top-left' } });
   assert(base.configNow().overlayCorner === 'top-left', 'corner edits land in config');

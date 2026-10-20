@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
-[![Client bundle size](https://img.shields.io/badge/client-%7E168%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E172%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.1--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -40,14 +40,14 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 
 ![DSH 页面右下角的三张浮层提醒：提问、审批请求（带「同意 / 拒绝」按钮）、回复完成](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/overlay-zh.png)
 
-*页面浮层提醒（1.8.0）· 真实插件在独立演示页里渲染 · 系统通知画不到副屏时用它，卡片落在 DSH 窗口所在的那块屏。* [查看原图](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/overlay-zh.png)
+*页面浮层提醒 · 真实插件在独立演示页里渲染 · 系统通知画不到副屏时用它，卡片落在 DSH 窗口所在的那块屏。* [查看原图](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/overlay-zh.png)
 
 <details>
 <summary>展开设置界面预览</summary>
 
 ![通知提醒设置页：页眉、提醒方式、什么时候提醒、试一试与折叠的高级设置](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-zh.png)
 
-真实插件设置组件（v1.10.0 默认配置）在独立演示环境里渲染；提醒方式是一组单选，每行的说明在鼠标停在标题文字上时才出现，所以这里只看到标题。
+真实插件设置组件（v1.10.1 默认配置）在独立演示环境里渲染；提醒方式是一组单选，每行的说明在鼠标停在标题文字上时才出现，所以这里只看到标题。
 </details>
 
 ## 安装
@@ -112,15 +112,15 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ## 在 DSH 设置里改配置
 
-打开 **设置 → 通知提醒**。页面按「提醒方式 → 什么时候提醒 → 试一试」三段排开，不常改的收进底部「高级设置」，点一下展开。每行只写标题，具体说明在鼠标移上去时弹出的小方框里（触屏或键盘操作时留一份隐藏文本给读屏）。
+打开 **设置 → 通知提醒**。页面按「提醒方式 → 什么时候提醒 → 试一试」三段排开，不常改的收进底部「高级设置」，点一下展开。每行只写标题，具体说明在鼠标停在标题文字上时弹出的小方框里（只有标题本身触发布局，整行空白处不会弹；触屏或键盘操作时留一份隐藏文本给读屏）。带 ▸ 的行点一下展开子项。
 
 ### 提醒方式
 
 - **启用提醒** 总开关：关闭后不弹通知、不响提示音，也不改标签页标题；
 - **提醒方式（二选一）**：系统通知 / 页面浮层，单选，开了这个就不再弹那个；
   - **系统通知**（默认）：进 Windows / macOS 通知中心，需要通知权限；
-  - **页面浮层**：在 DSH 页面角落画提醒卡片，窗口在哪块屏它就在哪块屏——系统通知只会画在主屏，主屏不看时用它；不需要通知权限，桌面端也能在卡片上直接「同意 / 拒绝」。选中后可选四个角落的位置，见[副屏与浮层提醒](#副屏与浮层提醒)；
-- **提示音 / 音量**：提示音开关与音量滑块；具体播什么由「高级设置 → 音效来源」决定；
+  - **页面浮层**：在 DSH 页面角落画提醒卡片，窗口在哪块屏它就在哪块屏——系统通知只会画在主屏，主屏不看时用它；不需要通知权限，桌面端也能在卡片上直接「同意 / 拒绝」。选中后可在该行点开选四个角落的位置，见[副屏与浮层提醒](#副屏与浮层提醒)；
+- **提示音 / 音量**：开关直接切；音量滑块收在该行里，点一下标题（▸ 变成 ▾）展开。具体播什么由「高级设置 → 音效来源」决定；
 - **审批通知上直接裁决**（默认开）：审批通知带「同意 / 拒绝」，点一下即完成裁决，不用切回页面。**桌面端的通知没有按钮**（`dsh-app://` 页面无法注册 Service Worker），需要按钮就打开「页面浮层提醒」，改在浮层上裁决；设置页会如实说明当前哪种渠道能给按钮。
 
 ### 副屏与浮层提醒
@@ -129,10 +129,10 @@ Windows 的系统通知横幅固定画在主屏上，系统没有设置项、浏
 
 「页面浮层提醒」绕开系统通知中心，直接在 DSH 页面里画一张卡片：窗口在哪块屏，卡片就出现在哪块屏。
 
-- **位置**：设置里选右上 / 右下 / 左上 / 左下，默认右下；改完立刻生效；
+- **位置**：点开「页面浮层提醒」那一行（▸ 变 ▾）再选右上 / 右下 / 左上 / 左下，默认右下，行上直接显示当前值；改完立刻生效；
 - **不需要通知权限**：通知权限没给、或桌面端弹不出带按钮的通知时，浮层照常工作；
 - **审批卡片带「同意 / 拒绝」**：与审批卡片的「允许一次 / 拒绝」等价，桌面端也能用（不依赖 Service Worker）；点卡片正文则切回对应对话；
-- **停留时间**：「需要你」12 秒，「回复完成」6 秒，带按钮的审批卡片 18 秒，都会自动收起；也可以点卡片或右上角叉提前关掉。最多同时叠 4 张；
+- **停留时间**：普通提醒 5 秒自动收起，带「同意 / 拒绝」的审批卡片 12 秒，系统通知同档（普通 5 秒、带按钮 12 秒）；也可以点卡片或右上角叉提前关掉。最多同时叠 4 张；
 - **与系统通知的关系**：二选一。以前两个开关可以同开，结果同一条提醒弹两遍、还互相挡住，1.10.0 起改成单选。老配置里开着浮层的，升级后自动落到浮层。
 
 浮层只知道窗口在哪块屏，不知道你人在看哪块屏。窗口留在主屏、人却盯着副屏时，它同样看不见。

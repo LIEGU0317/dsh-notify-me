@@ -47,7 +47,7 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 
 ![The Notify me settings page: header, how you get told, when to alert, try it, and the collapsed Advanced block](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-en.png)
 
-The real settings component (v1.10.2 defaults) rendered in a standalone demo shell. Alert type is a segmented control, and row explanations live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
+Just the plugin panel (the real component, v1.10.2 defaults) without the DSH navigation sidebar. Alert type is a segmented control, and row explanations live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
 </details>
 
 ## Installation

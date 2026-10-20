@@ -2,6 +2,16 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [Unreleased]
+
+### 兼容性
+- 适配 `0.2.1-rc.2`（当前 npm latest）：隔离 `DSH_HOME` 起 `dsh web`，启动页 70 个条目里插件排第 59、`application` 批，三个注入目标都在它前面且解析正常；`/plugins/??dsh-notify-me/client.js&rev=…` 返回 1.7.0 构建（140,153 B）；无头 Chromium 载入页面后 `apply` 执行，`window.__dshNotifyMe.debug()` 报 `uiSession: bound`、来源 `sessionStatus`。宿主侧公共 store 与 `0.2.0-rc.2` 同形（`sessionStatus`、`retainedBy.mainView`、`uiWorkspace.openSession()`），**不需要改代码**。
+- `package.json` 的 `dsh.compatibility.dshReleases` 补 `0.2.1-rc.2`。`0.2.1-rc.2` 的宿主已不再读取该字段（安装门控只看 `peerDependencies` 与 `engines`），它现在只是给人看的记录。
+- README（中英）同步：徽章、实测版本句、代际表、两坑段落与已知限制都补上 `0.2.1-rc.2`。
+
+### 测试
+- `npm test` 两套件在 0.2.1-rc.2 的 cordis 4.0.5 上通过（`smoke/smoke-test.cjs` 与真 cordis 腿 `smoke/cordis-host-test.mjs`）。
+
 ## [1.7.0] — 2026-10-16
 
 ### 新增

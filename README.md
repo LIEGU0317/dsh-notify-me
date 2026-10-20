@@ -12,7 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
 [![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
-[![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.0--rc.2-6366f1.svg?style=flat-square)](#兼容性)
+[![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.1--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 </div>
@@ -166,24 +166,26 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ## 兼容性
 
-逐版本兼容声明以 [package.json](package.json) 的 `dsh.compatibility.dshReleases` 为准。
+逐版本适配记录见 [package.json](package.json) 的 `dsh.compatibility.dshReleases`。当前宿主（`0.2.1-rc.2`）的安装门控只读 `peerDependencies` 与 `engines`，**不再读取这个字段**，所以它现在只是一份给人看的记录，不构成门禁。
 
 实测**真正激活**（各自独立 profile 启动：插件条目进启动页 `__DSH_BOOT__` 且注入依赖解析通过、`/plugins/??dsh-notify-me/client.js&rev=…` 返回含新代码的构建，设置里出现「通知提醒」分区，即插件的 `apply` 确实执行）于 `0.1.2-rc.1`、`0.1.5-rc.1`、`0.1.5-rc.2` 与 `0.2.0-rc.2`；更早的 `0.1.1-rc.2` 亦验证过。
+
+`0.2.1-rc.2`（当前 latest）另跑了一轮隔离验证：隔离 `DSH_HOME` 起 `dsh web`（70 个启动条目），插件条目排在第 59、`application` 批，三个注入目标都在且都排在它前面；`/plugins/??dsh-notify-me/client.js&rev=…` 返回 1.7.0 源码构建（140,153 B）；无头 Chromium 载入页面后 `apply` 正常执行，`window.__dshNotifyMe.debug()` 报 `uiSession: bound`、`uiSessionSource: sessionStatus`、`bridge: active`。宿主侧的形状与 `0.2.0-rc.2` 一致，没有需要改代码的地方。
 
 <details>
 <summary>宿主代际与适配排查细节</summary>
 
-插件按宿主代际自动选源，逐版本声明见 `package.json` 的 `dsh.compatibility.dshReleases`：
+插件按宿主代际自动选源；下表是各形状的边界，不是门禁：
 
 | 宿主代际 | 「需要你」交互来源 | 判断当前会话 | 点通知切会话 |
 | --- | --- | --- | --- |
 | `≤ 0.1.2-alpha.1` | 控制器快照的 `pending[]` | 快照 `current` | `sessions.open()` |
 | `0.1.2-alpha.2 .. 0.1.6-alpha.1` | `uiSession.pendingInteractions` | 快照 `current` | `sessions.open()` |
-| `≥ 0.1.6-alpha.2`（含 `0.2.0-rc.2`） | `uiSession.sessionStatus` | `retainedBy.mainView` | `uiWorkspace.openSession()` |
+| `≥ 0.1.6-alpha.2`（含 `0.2.0-rc.2`、`0.2.1-rc.2`） | `uiSession.sessionStatus` | `retainedBy.mainView` | `uiWorkspace.openSession()` |
 
-区间仅作示意：插件按 store 形状自动选源（`sessionStatus` 存在即走新路），版本号只是各形状的出现边界。`package.json` 的 `peerDependencies` 范围同理只影响 npm install 的提示文案——兼容与否以 `dshReleases` 的逐版实测声明为准，未实测的新版本由形状驱动兜底。
+区间仅作示意：插件按 store 形状自动选源（`sessionStatus` 存在即走新路），版本号只是各形状的出现边界。`package.json` 的 `peerDependencies` 范围决定 npm 的 peer 提示——`0.2.1-rc.2` 已落在 `>=0.2.0-rc.1 <0.3.0-0` 里，不需要豁免；`dshReleases` 只是存档，真实兼容性以逐版实测为准，未实测的新版本由形状驱动兜底。
 
-两个坑值得记住：一是 `dsh.client.inject` 里列了新版运行时已不再提供的包，客户端条目会停在 `pending (waiting for services: …)` 而永不执行——1.1.3 在 `0.1.2-rc.1` 及以后正是这样失效的；二是宿主换存储/字段名时**不会报错**，提醒只会静默失效——`0.2.0-rc.2` 上 `pendingInteractions`→`sessionStatus`、`list.current`→`retainedBy.mainView`、`sessions.open()`→`uiWorkspace.openSession()` 都是这一类，所以每次适配都要用 `window.__dshNotifyMe.debug()` 确认真的是 `bound`、以及用的是哪个来源。
+两个坑值得记住：一是 `dsh.client.inject` 里列了新版运行时已不再提供的包，客户端条目会停在 `pending (waiting for services: …)` 而永不执行——1.1.3 在 `0.1.2-rc.1` 及以后正是这样失效的；二是宿主换存储/字段名时**不会报错**，提醒只会静默失效——`0.2.0-rc.2` 上 `pendingInteractions`→`sessionStatus`、`list.current`→`retainedBy.mainView`、`sessions.open()`→`uiWorkspace.openSession()` 都是这一类，所以每次适配都要用 `window.__dshNotifyMe.debug()` 确认真的是 `bound`、以及用的是哪个来源。`0.2.1-rc.2` 这两处都没有再变：`sessionStatus` 仍是 `{running, pendingInteraction, completionUnread}` 的 Map，`uiWorkspace.openSession(id)` 照旧，会话列表里仍然没有 `current`。
 
 </details>
 
@@ -267,7 +269,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 - 快捷裁决按钮要 Service Worker：`http://127.0.0.1`、`https` 可用，`http://192.168.x.x` 这类局域网地址不行；**桌面端（`dsh-app://`）已实测无法注册 Service Worker**，按钮渲染不了，审批通知退回无按钮样式。浏览器或桌面宿主不渲染通知按钮时，`window.__dshNotifyMe.debug()` 的 `bridge` 字段会说明原因，其余功能不受影响。
 - macOS：浏览器里提醒、提示音、标题标记、点通知跳转都没有平台假设，照常工作；但 DSH Desktop（Electron）的系统通知要求应用已签名，未签名的通知直接发不出去，官方 macOS 版是否满足这一前提未实测；审批按钮在 macOS 桌面宿主上的渲染同样未实测（Windows 桌面端已实测不渲染，见上条），不渲染时自动退回无按钮通知。
 - 配置存在浏览器 `localStorage`：换浏览器/设备或清除站点数据后会回到默认值（设置页可一键恢复默认）。
-- `≥ 0.1.6`（含 `0.2.0-rc.2`）的「回复完成」提醒正文只有会话名，不再附带回复摘要——宿主快照已不再提供 `nodes`；提醒本身照常触发。
+- `≥ 0.1.6`（含 `0.2.0-rc.2`、`0.2.1-rc.2`）的「回复完成」提醒正文只有会话名，不再附带回复摘要——宿主快照已不再提供 `nodes`；提醒本身照常触发。
 - 标题标记由宿主与插件共同写 `document.title`：宿主重算标题时标记可能被覆盖，直到下一次提醒事件重新写成。
 - 「当前对话不弹通知」按 `document.hidden` 判定：窗口被别的应用完全盖住时仍算「页面可见」，此时当前对话的等待照样静默。
 - 外部通知转发受浏览器跨域（CORS）限制：端点不放行时自动降级为「送出但不可确认」（no-cors），如实标为「已送出不可确认」；Discord Webhook 官方放行跨域，可直接确认送达。HTTP 错误如实记失败、不重试。转发在本地提醒决定要发之后才触发，所以被「当前对话不弹通知」等规则静音的提醒也不会外发。

@@ -12,7 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
 [![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
-[![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.0--rc.2-6366f1.svg?style=flat-square)](#compatibility)
+[![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.1--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 </div>
@@ -170,24 +170,26 @@ This is a **browser-layer** plugin: the DSH page must stay open (minimized or ba
 
 ## Compatibility
 
-Per-release compatibility declarations live in [package.json](package.json), under `dsh.compatibility.dshReleases`.
+Per-release adaptation records live in [package.json](package.json), under `dsh.compatibility.dshReleases`. The current host (`0.2.1-rc.2`) no longer reads that field — installation gates only on `peerDependencies` and `engines` — so it is a human-readable record, not a gate.
 
 Verified to actually activate on `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2` and `0.2.0-rc.2` (each booted in its own profile: the plugin entry lands in the boot page's `__DSH_BOOT__` with its inject dependencies resolved, `/plugins/??dsh-notify-me/client.js&rev=…` serves a build containing the new code, and the Settings → Notifications section registers, i.e. the plugin's `apply` really runs), and previously on `0.1.1-rc.2`.
+
+`0.2.1-rc.2` (current latest) got its own isolated run: an isolated `DSH_HOME` booting `dsh web` (70 boot entries) placed the plugin entry 59th, in the `application` batch, with all three inject targets present and ordered before it; `/plugins/??dsh-notify-me/client.js&rev=…` served the 1.7.0 source build (140,153 B); loaded in a headless Chromium page, `apply` ran — `window.__dshNotifyMe.debug()` reported `uiSession: bound`, `uiSessionSource: sessionStatus`, `bridge: active`. Host-side shapes match `0.2.0-rc.2`; no plugin code change was needed.
 
 <details>
 <summary>Host generations and adaptation diagnostics</summary>
 
-The plugin picks its interaction source per host generation; per-release declarations live in `package.json` under `dsh.compatibility.dshReleases`:
+The plugin picks its interaction source per host generation; the table below marks where each shape appeared — it is not a gate (the current host does not read `dshReleases`):
 
 | Host generation | "Needs you" interaction source | Current session | Toast-click navigation |
 | --- | --- | --- | --- |
 | `<= 0.1.2-alpha.1` | controller snapshot `pending[]` | snapshot `current` | `sessions.open()` |
 | `0.1.2-alpha.2 .. 0.1.6-alpha.1` | `uiSession.pendingInteractions` | snapshot `current` | `sessions.open()` |
-| `>= 0.1.6-alpha.2` (incl. `0.2.0-rc.2`) | `uiSession.sessionStatus` | `retainedBy.mainView` | `uiWorkspace.openSession()` |
+| `>= 0.1.6-alpha.2` (incl. `0.2.0-rc.2`, `0.2.1-rc.2`) | `uiSession.sessionStatus` | `retainedBy.mainView` | `uiWorkspace.openSession()` |
 
-The ranges are illustrative: the plugin picks its source by store shape (whenever `sessionStatus` exists it takes the new path); the version numbers only mark where each shape appeared. The `peerDependencies` range in `package.json` likewise only shapes npm's install warning — compatibility is declared per release in `dshReleases` after real testing, and untested new versions fall back to shape-driven behaviour.
+The ranges are illustrative: the plugin picks its source by store shape (whenever `sessionStatus` exists it takes the new path); the version numbers only mark where each shape appeared. The `peerDependencies` range in `package.json` shapes npm's peer warning — `0.2.1-rc.2` already falls inside `>=0.2.0-rc.1 <0.3.0-0`, so no exemption is needed; `dshReleases` is just an archive, real compatibility is per-release testing, and untested new versions fall back to shape-driven behaviour.
 
-Two traps are worth remembering: a package listed in `dsh.client.inject` that a newer runtime no longer ships parks the client entry at `pending (waiting for services: …)` forever — which is what broke 1.1.3 on `0.1.2-rc.1` and later; and when the host renames a store or a field nothing throws, alerts just go **silent** — `0.2.0-rc.2` moved `pendingInteractions`→`sessionStatus`, `list.current`→`retainedBy.mainView` and `sessions.open()`→`uiWorkspace.openSession()`. So every adaptation must confirm `window.__dshNotifyMe.debug()` reports `bound` and which source answered.
+Two traps are worth remembering: a package listed in `dsh.client.inject` that a newer runtime no longer ships parks the client entry at `pending (waiting for services: …)` forever — which is what broke 1.1.3 on `0.1.2-rc.1` and later; and when the host renames a store or a field nothing throws, alerts just go **silent** — `0.2.0-rc.2` moved `pendingInteractions`→`sessionStatus`, `list.current`→`retainedBy.mainView` and `sessions.open()`→`uiWorkspace.openSession()`. So every adaptation must confirm `window.__dshNotifyMe.debug()` reports `bound` and which source answered. `0.2.1-rc.2` changed neither: `sessionStatus` is still a Map of `{running, pendingInteraction, completionUnread}`, `uiWorkspace.openSession(id)` is unchanged, and the session list still has no `current`.
 
 </details>
 
@@ -271,7 +273,7 @@ Verified on the real shell (DSH Desktop 0.2.0-rc.2, three rounds of retesting in
 - Quick-decision buttons need a Service Worker: they work on `http://127.0.0.1` and `https`, not on plain `http://192.168.x.x`-style LAN addresses, and some browsers or desktop hosts never render notification buttons. **The Desktop (`dsh-app://`) is tested and cannot register a Service Worker**, so buttons never render there and approval toasts fall back to their buttonless form. The `bridge` field of `window.__dshNotifyMe.debug()` says why; everything else keeps working.
 - macOS: in the browser, alerts, sounds, the title marker and toast-click navigation carry no OS assumptions and work as on Windows. Two caveats: DSH Desktop (Electron) notifications require the app to be code-signed — unsigned builds simply emit no notification — and whether the official macOS build satisfies that is untested; and notification buttons on the macOS desktop host are likewise untested (the Windows desktop host is tested and renders none, see the line above), falling back to the buttonless form above.
 - Config lives in browser `localStorage`: switching browsers/devices or clearing site data returns to defaults (one-click restore in the Settings page).
-- On `>= 0.1.6` (including `0.2.0-rc.2`) the "reply finished" toast body carries only the session label, no assistant snippet: host snapshots no longer expose `nodes`. The alert itself still fires.
+- On `>= 0.1.6` (including `0.2.0-rc.2`, `0.2.1-rc.2`) the "reply finished" toast body carries only the session label, no assistant snippet: host snapshots no longer expose `nodes`. The alert itself still fires.
 - The title marker is written into `document.title` alongside the host: when the host recomputes the title it can overwrite the marker until the next alert event rewrites it.
 - "Stay quiet for the conversation on screen" is judged by `document.hidden`: a window fully covered by other apps still counts as visible, so waits in the current conversation stay quiet there too.
 - External notification forwarding is subject to browser CORS rules: an endpoint that does not allow cross-origin requests falls back to a "sent but unverifiable" delivery (no-cors) and is reported honestly as such; Discord webhooks do allow cross-origin, so delivery to them is confirmed. HTTP errors are recorded as failures and never blindly retried. Forwarding runs only after the local alert has decided to fire, so anything the rules silence is never sent out.

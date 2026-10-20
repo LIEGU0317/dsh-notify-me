@@ -21,7 +21,9 @@
 
 ## 为什么不能替换设置左侧导航那一行的图标
 
-DSH 的设置外壳（`@deepseek-ai/dsh-client-ui-settings-general`）按分区 id 硬编码导航图标：只认 `account` / `models` / `agent-presets` / `plugins` / `archived-sessions`，其余分区一律 `IconSettingsOutlineMedium`（默认齿轮），`settings.section` 账本里也没有图标字段。插件只能在自己的页面里画标志，导航行跟随宿主。
+DSH 的设置外壳（`@deepseek-ai/dsh-client-ui-settings-general`）按分区 id 硬编码导航图标：只认 `account` / `models` / `agent-presets` / `plugins` / `archived-sessions`，其余分区一律 `IconSettingsOutlineMedium`（默认齿轮），`settings.section` 账本里也没有图标字段。
+
+所以 1.9.1 起改成渲染后补丁（`lib/client.js` 的 `installNavBell()`）：设置面板打开后，按本地化标签找到插件那一行的导航按钮，把宿主生成的 `<svg>` 换成 `icon-outline.svg` 的同款形状，并沿用宿主给的 icon class（class 名是 CSS module hash，跨版本会变，不能写死）。面板每次打开都是新的 portal，因此用 MutationObserver 跟随；宿主换结构时补丁自动放弃，回落到默认齿轮。
 
 ## 重新生成位图
 

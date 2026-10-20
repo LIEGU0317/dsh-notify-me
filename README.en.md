@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
-[![Client bundle size](https://img.shields.io/badge/client-%7E156%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E161%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.1--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -193,7 +193,7 @@ The last block inside Advanced. The page protocol is detected automatically to t
 
 </details>
 
-> The settings sidebar icon is rendered by the DSH settings shell: it hard-codes icons per section id (account / models / agent-presets / plugins / archived-sessions) and gives every other section the default gear — `settings.section` has no icon field, so the plugin's bell can only appear inside its own page.
+> The settings sidebar icon is rendered by the DSH settings shell: it hard-codes icons per section id (account / models / agent-presets / plugins / archived-sessions) and `settings.section` has no icon field. The plugin therefore patches that row after the panel renders: it finds its own entry by the localised label text, swaps the host `<svg>` for the brand bell (keeping the host icon class), and follows re-renders with a MutationObserver; if the host changes its markup the patch quietly gives up and the default gear stays.
 
 > Notification permission is required: click once on the page → **Allow** (or address-bar lock → Site settings → Notifications → Allow → reload). On macOS, also allow the browser under System Settings → Notifications.
 
@@ -322,7 +322,7 @@ Verified on the real shell (DSH Desktop 0.2.0-rc.2, three rounds of retesting in
 - "Stay quiet for the conversation on screen" is judged by `document.hidden`: a window fully covered by other apps still counts as visible, so waits in the current conversation stay quiet there too.
 - External notification forwarding is subject to browser CORS rules: an endpoint that does not allow cross-origin requests falls back to a "sent but unverifiable" delivery (no-cors) and is reported honestly as such; Discord webhooks do allow cross-origin, so delivery to them is confirmed. HTTP errors are recorded as failures and never blindly retried. Forwarding runs only after the local alert has decided to fire, so anything the rules silence is never sent out.
 
-- **The settings sidebar row keeps the host's default gear icon**: the settings shell hard-codes icons per section id, gives every other section the default gear, and `settings.section` exposes no icon field — the plugin cannot change it. Its own bell only appears inside the settings page and in this README.
+- **The settings sidebar glyph relies on a DOM patch**: the shell hard-codes icons per section id and `settings.section` exposes no icon field, so the plugin can only swap the `<svg>` in its own row after the panel renders. It depends on the current panel structure (`data-shortcut-modal="settings"` plus a label `<span>` inside each nav button); if DSH changes that markup the patch silently stops working and the default gear shows instead — nothing else is affected.
 
 ## Development
 

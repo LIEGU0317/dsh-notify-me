@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
-[![Client bundle size](https://img.shields.io/badge/client-%7E156%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E161%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.1--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -189,7 +189,7 @@ Windows 的系统通知横幅固定画在主屏上，系统没有设置项、浏
 
 </details>
 
-> 左侧导航行的图标由 DSH 设置外壳统一渲染：外壳按分区 id 硬编码（只认 account / models / agent-presets / plugins / archived-sessions），其他分区一律给默认齿轮，`settings.section` 也没有图标字段——插件的铃铛标志只能出现在自己的页面里，换不了导航行。
+> 左侧导航行的图标由 DSH 设置外壳统一渲染：外壳按分区 id 硬编码（只认 account / models / agent-presets / plugins / archived-sessions），其他分区一律给默认齿轮，`settings.section` 也没有图标字段。插件的做法是在设置面板渲染后替换那一行：按本地化标签文本找到自己的入口，把宿主的 `<svg>` 换成品牌铃铛（保留宿主给的 icon class），并用 MutationObserver 跟随重渲染；宿主改结构时会自动放弃、回落到齿轮。
 
 > 需要浏览器通知权限：页面上点一下 → 允许；或地址栏锁 → 站点设置 → 通知 → 允许 → 刷新。macOS 还要在 系统设置 → 通知 里允许该浏览器。
 
@@ -318,7 +318,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 - 「当前对话不弹通知」按 `document.hidden` 判定：窗口被别的应用完全盖住时仍算「页面可见」，此时当前对话的等待照样静默。
 - 外部通知转发受浏览器跨域（CORS）限制：端点不放行时自动降级为「送出但不可确认」（no-cors），如实标为「已送出不可确认」；Discord Webhook 官方放行跨域，可直接确认送达。HTTP 错误如实记失败、不重试。转发在本地提醒决定要发之后才触发，所以被「当前对话不弹通知」等规则静音的提醒也不会外发。
 
-- **设置左侧导航行是宿主的默认齿轮图标**：设置外壳按分区 id 硬编码图标，其它分区一律给默认齿轮，`settings.section` 没有图标字段，插件改不了；插件自己的铃铛标志只出现在设置页页眉与 README。
+- **设置左侧导航行图标靠 DOM 补丁**：外壳按分区 id 硬编码图标且 `settings.section` 没有图标字段，插件只能在面板渲染后把那一行的 `<svg>` 换成铃铛。命中依赖宿主当前的面板结构（`data-shortcut-modal="settings"` + 导航按钮里的标签 `<span>`）；如果 DSH 改了这套结构，补丁会静默失效、显示回默认齿轮，其他功能不受影响。
 
 ## 开发自检
 

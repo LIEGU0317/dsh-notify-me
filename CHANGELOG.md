@@ -2,6 +2,20 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.9.1] — 2026-10-20
+
+### 新增
+
+- **设置左侧导航行换成品牌铃铛**：DSH 的设置外壳按分区 id 硬编码导航图标，`settings.section` 没有图标字段，所以插件改为面板渲染后打补丁——按本地化标签找到自己那一行的导航按钮，把宿主生成的 `<svg>` 换成品牌线稿（形状与 `docs/brand/icon-outline.svg` 一致），沿用宿主给的 icon class，并用 MutationObserver 跟随面板重渲染与重开。
+- 宿主改结构时补丁静默放弃，显示回默认齿轮，其他功能不受影响。
+
+### 变更
+
+- README（中英）与 `docs/brand/README.md` 的旧口径「导航行图标换不了」改成实际做法与失效条件；`screenshots.json` 补上 1.8.0 / 1.9.0 的截图并修正已删除的 `.jpg` 路径；徽章 bundle 尺寸更新为 ~161 KiB。
+
+### 测试
+
+- `npm test` 两套件通过；另用真 bundle + 合成宿主面板（`data-shortcut-modal="settings"`、`button.navCell > svg + span.navLabel`）在无头 Chromium 里验证：三行导航里只有「通知提醒」变成铃铛（`data-dnm-nav="1"`、三条 shape），另外两行保持齿轮，图标 class 未丢。
 ## [Unreleased]
 
 ### 兼容性

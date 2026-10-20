@@ -11,7 +11,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#安装)
-[![Client bundle size](https://img.shields.io/badge/client-%7E137%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E152%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-%E5%B7%B2%E9%80%82%E9%85%8D%200.2.1--rc.2-6366f1.svg?style=flat-square)](#兼容性)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -24,8 +24,9 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 - **需要你操作时**：审批、方案确认、提问，用通知、提示音和标题标记提醒。
 - **后台回复完成时**：及时回来查看结果，点击通知可回到对应对话。
 - **离开电脑时**：可选转发到 Discord、Bark、Gotify 或自己的 Webhook。
+- **不看主屏时**：可选页面内浮层提醒，跟着 DSH 窗口出现在你正看着的那块屏（系统通知只会出现在主屏）。
 
-> 页面或桌面应用需保持运行，后台 / 最小化可以。系统通知需要通知权限；审批按钮仅在支持 Service Worker 的 Web 环境可用（如 `http://127.0.0.1` 或 `https`），桌面端使用无按钮通知。
+> 页面或桌面应用需保持运行，后台 / 最小化可以。系统通知需要通知权限；审批按钮在支持 Service Worker 的 Web 环境（如 `http://127.0.0.1` 或 `https`）由通知提供，桌面端的通知没有按钮——打开「页面浮层提醒」后可在浮层上直接裁决（见[副屏与浮层提醒](#副屏与浮层提醒)）。
 
 > 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**、**外部通知**、**Discord / Bark / Gotify 推送**（npm 关键词已含以上中英文词）。
 
@@ -35,12 +36,16 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 
 *普通通知示例 · Windows / Edge · 不含审批按钮。* [查看原图](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/notify-toast.png)
 
+![DSH 页面右下角的三张浮层提醒：提问、审批请求（带「同意 / 拒绝」按钮）、回复完成](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/overlay-zh.png)
+
+*页面浮层提醒（1.8.0）· 真实插件在独立演示页里渲染 · 系统通知画不到副屏时用它，卡片落在 DSH 窗口所在的那块屏。* [查看原图](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/overlay-zh.png)
+
 <details>
 <summary>展开设置界面预览</summary>
 
 ![通知提醒设置：启用提醒、运行环境、通知与会话规则](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-zh.jpg)
 
-真实插件设置组件，使用 v1.7.0 默认配置在独立演示环境中渲染；展示基础设置区域，不包含 DSH 宿主外壳。
+真实插件设置组件，使用 v1.7.0 默认配置在独立演示环境中渲染；展示基础设置区域，不包含 DSH 宿主外壳（1.8.0 新增的「页面浮层提醒」两行不在这张图里）。
 
 </details>
 
@@ -112,6 +117,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 - **启用提醒** 主开关：关闭后不再弹系统通知、不播放提示音、也不改标签页标题；
 - **系统通知 / 提示音 / 音量**：Toast、提示音开关与音量滑块；
+- **页面浮层提醒**（默认关，与「系统通知」互不替代，可同时开）：在 DSH 页面里画提醒卡片，位置跟窗口走，见[副屏与浮层提醒](#副屏与浮层提醒)；
 - **通知语言**：跟随界面 / 简体中文 / English——决定通知文字与 `🔔 …` 标题标记使用的语言；
 - **测试按钮**：用当前设置立即发一条「需要你」「回复完成」或「审批按钮」测试提醒（**不受**上面「页面打开时也提醒」开关限制；「需要你」测试的标题标记约 6 秒后自动消失）；
 - **版本信息**：设置页底部常显当前插件版本号（`dsh-notify-me v…`）——报障、核对是否装上新版本时直接照抄这一行。
@@ -121,7 +127,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **页面打开时也提醒「需要你」**（默认开）与 **页面打开时也提醒「回复完成」**（默认关）；
 - **当前对话不弹通知**（默认开）：等待就发生在你正看着的对话里时只留标题标记，不弹通知也不响音（免得盖住审批卡片）；页面切到后台立刻补发，若你已经处理掉就作废。其它后台会话不受影响；
 - **子代理会话不提醒**（默认开）：后台子代理（subagent）子会话的「需要你」与「回复完成」都不提醒——它们是主对话那一轮的步骤，完成由主对话自己的提醒覆盖；你当前打开的那个子代理会话照常提醒；关掉后恢复逐会话提醒；
-- **审批通知上直接裁决**（默认开）：权限审批的通知上带「同意 / 拒绝」按钮，点一下就按审批卡片的「允许一次 / 拒绝」直接裁决，不用切回页面；点通知正文仍是原来的「切回对应对话」。**桌面端暂不支持按钮**（`dsh-app://` 页面无法注册 Service Worker），审批通知自动退回无按钮样式，设置页会明示这一限制；
+- **审批通知上直接裁决**（默认开）：权限审批的通知上带「同意 / 拒绝」按钮，点一下就按审批卡片的「允许一次 / 拒绝」直接裁决，不用切回页面；点通知正文仍是原来的「切回对应对话」。**桌面端的通知没有按钮**（`dsh-app://` 页面无法注册 Service Worker），需要按钮时打开「页面浮层提醒」，改在浮层上裁决；设置页会如实说明当前哪种渠道能给按钮；
 
 <details>
 <summary>运行环境、点击回到对话与多窗口细节</summary>
@@ -130,6 +136,20 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **点击通知回到对应对话**（默认开）：点通知把 DSH 带到前台并切到提醒所属的对话；多个 DSH 标签页同时开着时，一次点击只调起一个窗口（优先当前可见的那个）并只切它的对话，其余标签页不动；关掉后点通知不做任何事。桌面端（DSH Desktop）同样会把窗口带到前台并切对话：页面侧的 `window.focus()` 在 Electron 里抬不动原生窗口，1.5.2 起改走应用自己的 `dsh://open` 深链调窗（窗口隐藏在托盘里也能被抬回来）；
 
 </details>
+
+### 副屏与浮层提醒
+
+Windows 的系统通知横幅固定画在主屏上，系统没有设置项、浏览器也没有 API 能把它挪到别的显示器。主屏不看、DSH 停在副屏时，通知就等于没发。
+
+「页面浮层提醒」绕开系统通知中心，直接在 DSH 页面里画一张卡片：窗口在哪块屏，卡片就出现在哪块屏。
+
+- **位置**：设置里选右上 / 右下 / 左上 / 左下，默认右下；改完立刻生效；
+- **不需要通知权限**：通知权限没给、或桌面端弹不出带按钮的通知时，浮层照常工作；
+- **审批卡片带「同意 / 拒绝」**：与审批卡片的「允许一次 / 拒绝」等价，桌面端也能用（不依赖 Service Worker）；点卡片正文则切回对应对话；
+- **停留时间**：「需要你」20 秒后自动收起，「回复完成」8 秒；带按钮的审批卡片不自动收，直到裁决或手动关掉。最多同时叠 4 张；
+- **与系统通知的关系**：两个开关互不替代。都开着时主屏看系统通知、副屏看浮层，也可以只留浮层。
+
+浮层只知道窗口在哪块屏，不知道你人在看哪块屏。窗口留在主屏、人却盯着副屏时，它同样看不见。
 
 ### 音效
 
@@ -158,6 +178,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 ## 提醒方式
 
 - **系统通知**：经浏览器弹出的系统通知，进 Windows 通知中心或 macOS 通知中心（点击回到提醒所属的对话；支持快捷裁决的 Web 环境可点审批按钮直接裁决，桌面端无按钮）
+- **页面浮层**（可选，默认关）：画在 DSH 页面角落的提醒卡片，落在窗口所在的那块屏，可带「同意 / 拒绝」按钮；见[副屏与浮层提醒](#副屏与浮层提醒)
 - **提示音**：默认是 WebAudio 合成音（「需要你」与「完成」使用不同音型）；可在设置里为两类提醒分别换成自定义音频文件，或改成让操作系统播放它自己的通知音
 - **标签页标题标记**：有待处理事项时，标题前出现 `🔔 需要你 · …` / `🔔 Action needed · …`；后台会话**完成但还没看**时出现 `✅ 回复完成 · …` / `✅ Reply finished · …`，打开对应会话（或它再次开跑）即消失。两种标记可同时出现，「需要你」在前；宿主改写标题后标记基于新标题重建
 - **外部通知**（可选，默认关）：按设置里配的推送目标，把同一条提醒转发到 Discord Webhook / Bark / Gotify / 自定义 Webhook——临时离开电脑时，手机上的推送渠道照样收到
@@ -212,6 +233,8 @@ window.__dshNotifyMe.setConfig({
   volume: 0.5,                // 音量 0~1
   autoFocus: true,            // 点通知回到提醒所属的对话
   quickActions: true,         // 审批通知上的「同意 / 拒绝」按钮
+  overlay: false,             // 页面浮层提醒（跟着 DSH 窗口落在哪块屏；不需要通知权限）
+  overlayCorner: "bottom-right", // 浮层位置：'top-right' | 'bottom-right' | 'top-left' | 'bottom-left'
   externalEnabled: false,     // 外部通知转发主开关（默认关：不填端点就什么都不发）
   externalAttention: true,    // 转发「需要你」（触发规则跟本地提醒完全一致）
   externalDone: true,         // 转发「回复完成」
@@ -264,6 +287,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 
 - 页面必须开着才会提醒（后台标签/最小化可以；关标签页即失效——浏览器层方案固有限制）。
 - 通知经由浏览器弹出，需允许浏览器通知权限，且勿扰模式不能屏蔽它。
+- 系统通知横幅只画在主屏：Windows 没有设置项、Chromium 没有 API 能把它指到别的显示器（多屏时副屏收不到系统通知）。要用副屏提醒，开「页面浮层提醒」，它会跟着 DSH 窗口走。
 - 每次页面加载后第一次出声/弹通知前，需在页面上点击过一次（浏览器自动播放与权限策略）。
 - 未授权通知权限时只有提示音与标题标记。
 - 快捷裁决按钮要 Service Worker：`http://127.0.0.1`、`https` 可用，`http://192.168.x.x` 这类局域网地址不行；**桌面端（`dsh-app://`）已实测无法注册 Service Worker**，按钮渲染不了，审批通知退回无按钮样式。浏览器或桌面宿主不渲染通知按钮时，`window.__dshNotifyMe.debug()` 的 `bridge` 字段会说明原因，其余功能不受影响。
@@ -279,7 +303,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 ```powershell
 node --check lib\client.js
 node --check lib\index.js
-node smoke\smoke-test.cjs        # 离线状态机冒烟测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）
+node smoke\smoke-test.cjs        # 离线状态机冒烟测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）+ 页面浮层
 node smoke\cordis-host-test.mjs  # 真 cordis 端到端（找不到本机 DSH 时自动跳过）
 npm pack --dry-run               # 预览发布包
 ```

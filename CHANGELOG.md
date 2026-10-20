@@ -12,6 +12,28 @@ All notable changes to **dsh-notify-me** are documented here.
 ### 测试
 - `npm test` 两套件在 0.2.1-rc.2 的 cordis 4.0.5 上通过（`smoke/smoke-test.cjs` 与真 cordis 腿 `smoke/cordis-host-test.mjs`）。
 
+## [1.8.0] — 2026-10-20
+
+### 新增
+- **页面浮层提醒**（用户建议：分屏时系统通知只出现在主屏，而主屏基本不看）：Windows 的横幅固定画在主屏，系统没有设置项、Chromium 也没有 API 能把它指到别的显示器，所以新增一条不经过通知中心的通道。配置项 `overlay`（默认关）：在 DSH 页面角落直接画提醒卡片，窗口在哪块屏就出现在哪块屏。
+  - 位置 `overlayCorner`：`top-right` / `bottom-right` / `top-left` / `bottom-left`，默认右下，改完立即生效；
+  - 不需要通知权限，也不依赖 Service Worker；
+  - 审批卡片带「同意 / 拒绝」，走审批卡片自己的 `answer('allowed-once' | 'rejected')`——桌面端（`dsh-app://`，注册不了 Service Worker）因此也能裁决，这是系统通知给不了的；
+  - 停留时间：「需要你」20 秒、「回复完成」8 秒，带按钮的审批卡片不自动收；最多叠 4 张；点正文切回对应对话，右上角 × 关闭；
+  - 与「系统通知」互不替代，可同时开（主屏 toast + 副屏浮层），也可以只留浮层。
+- 设置页「系统通知」下方新增「页面浮层提醒」开关与「浮层位置」下拉（开关打开时才出现位置选项）。
+- `window.__dshNotifyMe.debug()` 新增 `overlay` 块（`enabled` / `corner` / `cards`）。
+
+### 变更
+- `quickFor()` 的门控从「`quickActions` 且 `toast`」放宽为「`quickActions` 且（`toast` 或 `overlay`）」：浮层是独立的按钮通道，关掉系统通知后仍可裁决。
+- 设置页底部按钮提示按渠道如实分流：浮层开着时不再报「快捷裁决按钮暂不可用」，改为「浮层上的「同意」同样等价于「允许一次」」。
+- 浮层的清理：HMR 重新注册时先撤掉上一份图层；关掉开关立即撤下所有卡片；审批在别处被裁决（页面审批卡片、通知按钮、会话切换）时对应浮层随之消失，不留可点的陈旧卡片。
+- 版本号 1.7.0 → 1.8.0；`window.__dshNotifyMe.version` 与 `package.json` 同步；README 中英同步（简介、基础设置、新增「副屏与浮层提醒」一节、提醒方式、控制台配置块、已知限制），client 体积徽章 137 → 152 KiB。
+
+### 测试
+- `smoke/smoke-test.cjs` 新增两段。① 浮层通道：默认不动 DOM、固定图层挂在 `<body>` 下、卡片类名/角色/文案、位置切换与非法值回落、4 张上限、点卡片与 × 撤下、关开关撤层、没有 `Notification` 的环境里审批按钮走完 `decidePending()` 并给出「已模拟同意」反馈、`debug().overlay` 上报。② 设置页浮层两行：开关与位置下拉的出现与持久化、文案、按钮提示分流。
+- `npm test` 两套件通过。
+
 ## [1.7.0] — 2026-10-16
 
 ### 新增

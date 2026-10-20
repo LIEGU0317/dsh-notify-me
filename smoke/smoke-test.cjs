@@ -2258,6 +2258,213 @@ async function settingsExternalRows() {
   console.log('external settings rows OK: card renders, targets edit/persist, test button reports, hints for the silent cases');
 }
 
+// ─────────────────── in-page overlay (alert channel) ──────────────────────
+// The overlay draws into the page, so the test needs a DOM: just enough of
+// createElement/appendChild/removeChild/getElementById for the fixed layer and
+// its cards, with textContent kept as a plain string the assertions can read.
+function makeFakeElement(tag) {
+  return {
+    tagName: String(tag || '').toUpperCase(),
+    children: [],
+    parentNode: null,
+    className: '',
+    id: '',
+    textContent: '',
+    dataset: {},
+    attributes: {},
+    onclick: null,
+    setAttribute(name, value) { this.attributes[name] = String(value); },
+    getAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null; },
+    appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+    removeChild(child) {
+      const i = this.children.indexOf(child);
+      if (i !== -1) this.children.splice(i, 1);
+      child.parentNode = null;
+      return child;
+    },
+  };
+}
+function installFakeDom(sandbox) {
+  const html = makeFakeElement('html');
+  const head = makeFakeElement('head');
+  const body = makeFakeElement('body');
+  html.appendChild(head);
+  html.appendChild(body);
+  const walk = (node, fn) => {
+    if (!node) return;
+    fn(node);
+    for (const c of node.children) walk(c, fn);
+  };
+  const byId = (id) => {
+    let hit = null;
+    walk(html, (n) => { if (!hit && n.id === id) hit = n; });
+    return hit;
+  };
+  Object.assign(sandbox.document, {
+    body,
+    head,
+    documentElement: html,
+    createElement: (tag) => makeFakeElement(tag),
+    getElementById: (id) => byId(id),
+    // The bundle asks exactly one selector question (is the style tag already
+    // there?), so answer that one honestly and nothing else.
+    querySelector: (sel) => {
+      if (String(sel).indexOf('data-plugin-css') === -1) return null;
+      let found = null;
+      walk(html, (n) => { if (!found && n.dataset && n.dataset.pluginCss) found = n; });
+      return found;
+    },
+  });
+  return { html, head, body, byId };
+}
+function domText(el, out) {
+  out = out || [];
+  if (el == null) return out;
+  if (typeof el === 'string') { out.push(el); return out; }
+  if (el.textContent) out.push(String(el.textContent));
+  for (const c of el.children) domText(c, out);
+  return out;
+}
+function findDom(root, pred) {
+  let hit = null;
+  const walk = (node) => {
+    if (!node || hit) return;
+    if (pred(node)) { hit = node; return; }
+    for (const c of node.children) walk(c);
+  };
+  walk(root);
+  return hit;
+}
+
+function overlayChannel() {
+  console.log('\n— in-page overlay: draws on the window\'s own screen —');
+  let dom = null;
+  const boot = (opts) => bootBundle({
+    withNotification: !!(opts && opts.withNotification),
+    extend(sandbox) { dom = installFakeDom(sandbox); },
+  });
+  const layer = () => dom.byId('dsh-notify-me-overlay');
+  const cards = () => (layer() ? layer().children.slice() : []);
+  const cardText = (card) => domText(card).join(' ');
+
+  // 1) Off by default: an alert draws nothing into the page at all.
+  const off = boot();
+  const apiOff = off.win.__dshNotifyMe;
+  apiOff.test('attention');
+  assert(!layer(), 'the default config leaves the page untouched');
+  assert(dom.body.children.length === 0, 'no layer node is created while the overlay is off');
+
+  // 2) On: one card, in the configured corner, carrying the alert copy.
+  const on = boot();
+  const api = on.win.__dshNotifyMe;
+  api.setConfig({ overlay: true });
+  api.test('attention');
+  assert(layer(), 'the fixed layer is mounted under <body>');
+  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'the layer sits in the default corner, got ' + layer().className);
+  assert(cards().length === 1, 'one attention card is stacked');
+  const first = cards()[0];
+  assert(first.className.indexOf('dnm-ov-attention') !== -1, 'the attention kind is styled, got ' + first.className);
+  assert(first.getAttribute('role') === 'alert', 'attention cards are announced as alerts');
+  assert(cardText(first).indexOf('提问') !== -1, 'the card carries the kind title');
+  assert(cardText(first).indexOf('测试提醒') !== -1, 'the card carries the body');
+  const closeBtn = findDom(first, (n) => n.className === 'dnm-ov-x');
+  assert(closeBtn && closeBtn.getAttribute('aria-label') === '关闭这条提醒', 'the close button is labelled');
+
+  // 3) Done vs attention styling, appended in order.
+  api.test('done');
+  assert(cards().length === 2, 'a second alert appends a second card');
+  assert(cards()[1].className.indexOf('dnm-ov-done') !== -1, 'the done kind is styled');
+
+  // 4) The corner follows the setting (and a nonsense value falls back).
+  api.setConfig({ overlayCorner: 'top-left' });
+  assert(layer().className === 'dnm-ov-layer dnm-ov-top-left', 'the layer moves with the corner setting, got ' + layer().className);
+  api.setConfig({ overlayCorner: 'middle-of-nowhere' });
+  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'an unknown corner falls back to bottom-right, got ' + layer().className);
+
+  // 5) The stack is capped so a burst cannot cover the window.
+  for (let i = 0; i < 6; i++) api.test('done');
+  assert(cards().length === 4, 'the stack caps at 4 cards, got ' + cards().length);
+
+  // 6) A card click opens nothing it cannot here, but it always dismisses.
+  const clickable = cards()[cards().length - 1];
+  clickable.onclick();
+  assert(cards().length === 3, 'clicking a card dismisses it');
+  const x = findDom(cards()[0], (n) => n.className === 'dnm-ov-x');
+  x.onclick();
+  assert(cards().length === 2, 'the close button dismisses its card');
+
+  // 7) Turning the option off takes the whole layer down at once.
+  api.setConfig({ overlay: false });
+  assert(!layer() && dom.body.children.length === 0, 'disabling the overlay removes the layer and its cards');
+
+  // 8) Approval buttons without any OS-notification support: the overlay is the
+  //    button channel the desktop shell needs (its dsh-app:// page cannot run
+  //    the Service Worker that OS action buttons require). testAlert('approval')
+  //    drives the same decidePending() chain the real buttons drive.
+  const desktopish = boot();
+  const dapi = desktopish.win.__dshNotifyMe;
+  assert(!('Notification' in desktopish.win), 'the case really has no Notification API');
+  dapi.setConfig({ overlay: true });
+  dapi.test('approval');
+  const approval = cards()[0];
+  assert(approval && cardText(approval).indexOf('测试审批') !== -1, 'the approval card renders');
+  const approve = findDom(approval, (n) => n.className === 'dnm-ov-btn dnm-ov-approve');
+  const reject = findDom(approval, (n) => n.className === 'dnm-ov-btn dnm-ov-reject');
+  assert(approve && approve.textContent === '同意', 'the approve button is there');
+  assert(reject && reject.textContent === '拒绝', 'the reject button is there');
+  assert(dapi.debug().actionKeys.length === 1, 'the pending action is registered before the press');
+  approve.onclick();
+  assert(dapi.debug().actionKeys.length === 0, 'pressing approve settles the pending action');
+  assert(desktopish.events.some((e) => e.kind === 'done' && String(e.body || '').indexOf('已模拟「同意」') !== -1),
+    'the press produced the approve feedback alert');
+  const feedback = cards().filter((c) => cardText(c).indexOf('已模拟「同意」') !== -1);
+  assert(feedback.length === 1, 'the feedback arrives as its own done card');
+  assert(cards().every((c) => cardText(c).indexOf('测试审批') === -1), 'the answered approval card is gone');
+
+  // 9) The diagnostics surface reports the channel, so "why is nothing drawn"
+  //    is answerable from the page.
+  const diag = boot();
+  const gapi = diag.win.__dshNotifyMe;
+  assert(gapi.debug().overlay.enabled === false, 'debug reports the overlay off by default');
+  gapi.setConfig({ overlay: true, overlayCorner: 'top-right' });
+  gapi.test('done');
+  const d = gapi.debug();
+  assert(d.overlay.enabled === true && d.overlay.corner === 'top-right' && d.overlay.cards === 1,
+    'debug reports the live overlay state, got ' + JSON.stringify(d.overlay));
+
+  console.log('overlay OK: default off, one card per alert, corner + cap + dismissal, approval buttons settle without a worker');
+}
+
+function settingsOverlayRows() {
+  console.log('\n— settings page: in-page overlay rows —');
+  const base = settingsBoot();
+  assert(base.text.indexOf('页面浮层提醒') !== -1, 'the overlay switch renders');
+  assert(base.text.indexOf('系统通知只会出现在主屏') !== -1, 'the hint explains why the overlay exists');
+  const sw = base.find((n) => n.props && n.props['aria-label'] === '页面浮层提醒');
+  assert(sw && sw.props['aria-checked'] === 'false', 'the overlay switch starts off');
+  assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
+    'no corner select while the overlay is off');
+  base.press('页面浮层提醒');
+  assert(base.configNow().overlay === true, 'toggling the overlay switch persists');
+  const corner = base.find((n) => n.props && n.props['aria-label'] === '浮层位置');
+  assert(corner && corner.props.value === 'bottom-right', 'the corner select appears with the default');
+  assert(base.textNow().indexOf('左下') !== -1, 'the corner options are localized');
+  corner.props.onChange({ currentTarget: { value: 'top-left' } });
+  assert(base.configNow().overlayCorner === 'top-left', 'corner edits land in config');
+  base.press('页面浮层提醒');
+  assert(base.configNow().overlay === false, 'the switch turns back off');
+  base.cleanup();
+
+  // With the overlay on, the quick-decision hint points at the overlay buttons
+  // instead of claiming they are unavailable.
+  const on = settingsBoot({ overlay: true });
+  assert(on.text.indexOf('浮层上的「同意」同样等价于') !== -1, 'the approval-equivalence note renders');
+  assert(on.text.indexOf('快捷裁决按钮暂不可用') === -1, 'the overlay no longer reports buttons as unavailable');
+  on.cleanup();
+
+  console.log('overlay settings rows OK: switch, corner select, copy, honest button hint');
+}
+
 (async () => {
   await legacyHost();
   await currentHost();
@@ -2270,6 +2477,8 @@ async function settingsExternalRows() {
   settingsSoundRows();
   await externalWebhooks();
   await settingsExternalRows();
+  overlayChannel();
+  settingsOverlayRows();
   await listChangeDerivation();
   console.log('\nALL SMOKE TESTS PASSED ✔');
   // Exit explicitly: marker-release timers stay armed on purpose (they mirror

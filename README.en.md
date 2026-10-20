@@ -13,7 +13,7 @@
 [![npm total downloads](https://img.shields.io/npm/dt/dsh-notify-me?style=flat-square&label=total%20downloads&color=1F883D)](https://www.npmjs.com/package/dsh-notify-me)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![DSH Web and Desktop](https://img.shields.io/badge/DSH-Web%20%7C%20Desktop-blue?style=flat-square)](#installation)
-[![Client bundle size](https://img.shields.io/badge/client-%7E164%20KiB-green?style=flat-square)](lib/client.js)
+[![Client bundle size](https://img.shields.io/badge/client-%7E166%20KiB-green?style=flat-square)](lib/client.js)
 [![DSH Compatibility](https://img.shields.io/badge/DSH-tested%200.2.1--rc.2-6366f1.svg?style=flat-square)](#compatibility)
 [![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
@@ -47,7 +47,7 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 
 ![The Notify me settings page: header, how you get told, when to alert, try it, and the collapsed Advanced block](https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/screenshots/settings-en.png)
 
-The real settings component (v1.9.2 defaults) rendered as the content column in a standalone demo shell. Row explanations now live in a hover tooltip, which is why only the titles show here.
+The real settings component (v1.9.2 defaults) rendered as the content column in a standalone demo shell. Row explanations now live in a hover tooltip that appears when the pointer rests on a title, which is why only the titles show here.
 </details>
 
 ## Installation
@@ -116,7 +116,7 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 
 ## Configure it from DSH Settings
 
-Open **Settings → Notify me**. The page runs as how you get told, when to alert, and a try-it block; the knobs you rarely touch fold into **Advanced** at the bottom. Rows show titles only — the explanation pops up next to the pointer on hover, with a hidden copy kept for screen readers.
+Open **Settings → Notify me**. The page runs as how you get told, when to alert, and a try-it block; the knobs you rarely touch fold into **Advanced** at the bottom. Rows show titles only — the explanation pops up next to the pointer once it rests on the title text (hovering a switch does nothing), with a hidden copy kept for screen readers.
 
 ### How you get told
 

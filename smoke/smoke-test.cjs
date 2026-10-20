@@ -2445,6 +2445,17 @@ function settingsOverlayRows() {
   const base = settingsBoot();
   assert(base.text.indexOf('页面浮层提醒') !== -1, 'the overlay switch renders');
   assert(base.text.indexOf('系统通知只会出现在主屏') !== -1, 'the hint explains why the overlay exists');
+  // The explanation hangs off the label text only — hovering a switch or a
+  // slider must not pop a box the user did not ask for.
+  const tips = base.findAll((n) => n.props && String(n.props.className || '').indexOf('dnm-rowTip') !== -1);
+  assert(tips.length > 0, 'explained rows mark something as the tooltip target');
+  assert(tips.every((n) => String(n.props.className).indexOf('dnm-rowLabel') !== -1),
+    'only the label text carries the tooltip');
+  assert(tips.every((n) => typeof n.props.onMouseEnter === 'function' && n.props['data-dnm-tip']),
+    'the label owns the hover handlers and the text');
+  const rowTips = base.findAll((n) => /(^| )dnm-row( |$)/.test(String((n.props && n.props.className) || ''))
+    && String(n.props.className).indexOf('dnm-rowTip') !== -1);
+  assert(rowTips.length === 0, 'no whole row is a tooltip target');
   const sw = base.find((n) => n.props && n.props['aria-label'] === '页面浮层提醒');
   assert(sw && sw.props['aria-checked'] === 'false', 'the overlay switch starts off');
   assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),

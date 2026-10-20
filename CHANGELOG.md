@@ -2,6 +2,18 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.9.5] — 2026-10-20
+
+### 说明
+
+- **修正 1.9.4 的口径过重**：实测补充了「有时能上前台」的反馈后重测——1.9.4 说的「0.2.1-rc.2 上失效」不准确，实际是**不稳定**：有时窗口会上前，有时只切对话。
+- 复测方法：把 `dsh://open` 深链单独拿出来，三种走法（直接带参启动 exe、走系统协议激活、`WM_SYSCOMMAND` 真实最小化后再发）各 3 次，**全部失败**——带参第二实例每次约 130 ms 后退出码 1（不带参数约 260 ms 退出码 0，正常单实例让位），最小化窗口的 `IsIconic` 每次保持 `true`。⇒ 能抬起来的那些次大概率是系统/Chromium 在通知点击时自己激活了窗口，不是深链。
+- README（中英）与设置页提示改为「不稳定」，并写明隔离复测结论；上游 [discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446) 待补充这条「间歇」信息。
+
+### 测试
+
+- `npm test` 两套件通过（`ALL SMOKE TESTS PASSED ✔` / `cordis-host-test passed`）。
+
 ## [1.9.4] — 2026-10-20
 
 ### 说明

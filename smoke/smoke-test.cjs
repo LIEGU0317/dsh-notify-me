@@ -119,6 +119,12 @@ function bootBundle(opts) {
     lastNotification: () => lastNotification,
     // Drive a real visibilitychange the way the browser would.
     fireVisibility: () => { for (const fn of [...docListeners.visibilitychange]) fn(); },
+    // Drive a real window focus/blur: a desktop window can sit behind another
+    // app while document.visibilityState still reads "visible".
+    setWindowFocus: (focused) => {
+      for (const fn of [...(listeners[focused ? 'focus' : 'blur'] || [])]) fn();
+    },
+    hasFocusListener: () => (listeners.focus || []).length > 0 && (listeners.blur || []).length > 0,
   };
 }
 
@@ -2787,6 +2793,64 @@ function settingsOverlayRows() {
   console.log('channel rows OK: two exclusive radios, corner select only for the overlay, honest button hint');
 }
 
+// A window that is merely covered is still "visible" to the browser: the
+// desktop shell only flips document.hidden on minimise or full occlusion. Users
+// mean "I am working elsewhere" when the window loses focus, so the reminders
+// that wait for the background have to fire on blur as well (1.10.5).
+async function awayWithoutHiding() {
+  console.log('\n— background = unfocused window, not just a hidden tab —');
+  const b = bootBundle({ withNotification: true });
+  const host = buildHost({ withUiSession: false });
+  host.setFace({ sessionId: 's1', running: false, pending: [], nodes: [], partial: null });
+  const { mod, win, doc, events } = b;
+  mod.apply(host.ctx);
+  win.__dshNotifyMe.onEvent = (kind, payload) => events.push({ kind, ...payload });
+  win.__dshNotifyMe.setConfig({ sound: false, language: 'zh', enabled: true, doneHiddenOnly: true, attentionHiddenOnly: false });
+
+  assert(b.hasFocusListener(), 'the core listens for window focus/blur');
+
+  // Visible + focused: a background completion stays quiet (unchanged default).
+  events.length = 0;
+  host.setList({ ids: ['bg'], byId: { bg: { running: true, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  await sleep(400);
+  host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: true } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  assert(events.filter((e) => e.kind === 'done').length === 0, 'a focused window stays quiet for a background finish');
+
+  // Same page, window behind another app: the finish must reach the user.
+  events.length = 0;
+  b.setWindowFocus(false);
+  host.setList({ ids: ['bg'], byId: { bg: { running: true, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  await sleep(400);
+  host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: true } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  assert(events.filter((e) => e.kind === 'done').length === 1, 'an unfocused window counts as background for a finish');
+
+  // Back in front: quiet again.
+  b.setWindowFocus(true);
+  events.length = 0;
+  host.setList({ ids: ['bg'], byId: { bg: { running: true, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  await sleep(400);
+  host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: true } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  assert(events.filter((e) => e.kind === 'done').length === 0, 'refocusing the window silences finishes again');
+  assert(doc.visibilityState === 'visible' && doc.hidden === false, 'the page never actually hid during this case');
+
+  // A wait kept quiet because it was on screen is re-delivered on blur.
+  win.__dshNotifyMe.setConfig({ sound: false, language: 'zh', enabled: true, currentHiddenOnly: true });
+  events.length = 0;
+  host.setFace({ ...host.faceSnap(), running: true, pending: [approval('a:away1')] });
+  host.notifyFace();
+  assert(events.length === 0, 'the on-screen approval stays quiet while the window has focus');
+  b.setWindowFocus(false);
+  assert(events.filter((e) => e.kind === 'attention').length === 1, 'blurring the window flushes the quieted approval');
+
+  console.log('window-focus OK: blur counts as background, refocus silences again');
+}
+
 (async () => {
   await legacyHost();
   await currentHost();
@@ -2804,6 +2868,7 @@ function settingsOverlayRows() {
   await desktopFallbackCard();
   settingsOverlayRows();
   await listChangeDerivation();
+  await awayWithoutHiding();
   console.log('\nALL SMOKE TESTS PASSED ✔');
   // Exit explicitly: marker-release timers stay armed on purpose (they mirror
   // browser behaviour) and would otherwise hold the loop open.

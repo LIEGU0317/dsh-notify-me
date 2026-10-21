@@ -75,7 +75,7 @@ The Electron application manages the `desktop` profile. Do not change the Web co
 
 1. Click once in the DSH page and allow notifications when prompted. If you previously declined, allow them in the browser's site settings. The operating system must also allow notifications from the browser / DSH Desktop.
 2. Open **Settings → Notify me**. Confirm that the section and plugin version at its foot appear, and leave the master switch, the alert type on system notifications, and sound enabled.
-3. Click **Test "reply finished"** on the settings page. A test notification should appear and sound according to your cue settings. This local test does not forward to external endpoints and ignores the "while the page is open" toggle.
+3. Click **Test "reply finished"** on the settings page. A test notification should appear and sound according to your cue settings. This local test does not forward to external endpoints and ignores the "while the window is in front" toggle.
 
 Web users can also test approval buttons. On Desktop the shell cannot register a Service Worker, so this test draws an in-page card with Approve / Reject in the window corner (since 1.10.4; earlier versions sent a plain notification).
 
@@ -110,7 +110,7 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 
 **Input needed** covers approval requests, plan review, and questions (`ask_user_question`). Approvals carry Approve / Reject: on Web as a system notification with buttons, on Desktop (which cannot register a Service Worker) as a card drawn in the window corner.
 
-**Reply finished** also covers background sessions. A finished but unread session keeps the `✅ Reply finished ·` title marker until opened. Title markers are independent of the "while the page is open" toggles.
+**Reply finished** also covers background sessions. A finished but unread session keeps the `✅ Reply finished ·` title marker until opened. Title markers are independent of the "while the window is in front" toggles.
 
 > **Background** subagent child sessions are **not** alerted about by default: DSH lists each of them as its own session, but they are steps inside the parent conversation's turn, so an alert for them is only noise. The subagent session you have open is not part of this and alerts as usual. Settings → "Ignore subagent sessions" turns the mute off.
 
@@ -143,9 +143,9 @@ The overlay only knows which screen the window is on, not which screen you are l
 
 ### When to alert
 
-- **Also alert "needs you" while the page is open** (on): turn it off to hear only from the background;
-- **Stay quiet for the conversation on screen** (on): a wait belonging to the conversation you are looking at keeps only the tab marker so the approval card stays readable; backgrounding restores alerts;
-- **Also alert "reply finished" while the page is open** (off): by default only background finishes alert;
+- **Also alert "needs you" while the window is in front** (on): turn it off to hear only once the window goes to the background — another app focused, the window covered, or minimized all count;
+- **Stay quiet for the conversation on screen** (on): a wait belonging to the conversation you are looking at keeps only the tab marker so the approval card stays readable; moving the window to the background restores alerts;
+- **Also alert "reply finished" while the window is in front** (off): by default only background finishes alert (a covered Desktop window counts as background since 1.10.5, not only a minimized one);
 - **Ignore subagent sessions** (on): skip background sessions spawned by a subagent — the parent conversation covers them; the one you have open still alerts;
 - **Click a toast to open that conversation** (on): the click switches to the conversation that raised it; in a browser it also brings the window forward, while on the Desktop shell it is flaky — sometimes the window comes forward, sometimes only the conversation switches (see [How the Desktop window gets raised](#how-the-desktop-window-gets-raised)); with several tabs open only one is raised, and off means a click does nothing.
 

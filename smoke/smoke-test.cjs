@@ -1042,7 +1042,7 @@ function bootWorker(HubCtor, windowClients) {
 }
 
 // An approval interaction shaped like the shipped PendingApproval: its
-// answer() is the exact verb the in-page card calls.
+// answer() is the exact verb a notification action button calls.
 function answerableApproval(key, extra, answers) {
   return Object.assign({
     key,
@@ -1139,7 +1139,7 @@ async function quickActionsHost() {
   assert(note.opts.data.sessionId === 's1', 'toast data carries the session id');
   assert(b.lastNotification() === null, 'no plain constructor toast on the button path');
 
-  // 3) clicking 同意 settles the request exactly like the in-page card
+  // 3) clicking 同意 settles the request exactly like the conversation's 允许一次
   events.length = 0;
   let click = w.click('approve', note.opts.data);
   await sleep(20);
@@ -2309,398 +2309,18 @@ async function settingsExternalRows() {
   console.log('external settings rows OK: card renders, targets edit/persist, test button reports, hints for the silent cases');
 }
 
-// ─────────────────── in-page overlay (alert channel) ──────────────────────
-// The overlay draws into the page, so the test needs a DOM: just enough of
-// createElement/appendChild/removeChild/getElementById for the fixed layer and
-// its cards, with textContent kept as a plain string the assertions can read.
-function makeFakeElement(tag) {
-  return {
-    tagName: String(tag || '').toUpperCase(),
-    children: [],
-    parentNode: null,
-    className: '',
-    id: '',
-    textContent: '',
-    dataset: {},
-    attributes: {},
-    onclick: null,
-    setAttribute(name, value) { this.attributes[name] = String(value); },
-    getAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null; },
-    appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
-    removeChild(child) {
-      const i = this.children.indexOf(child);
-      if (i !== -1) this.children.splice(i, 1);
-      child.parentNode = null;
-      return child;
-    },
-  };
-}
-function installFakeDom(sandbox) {
-  const html = makeFakeElement('html');
-  const head = makeFakeElement('head');
-  const body = makeFakeElement('body');
-  html.appendChild(head);
-  html.appendChild(body);
-  const walk = (node, fn) => {
-    if (!node) return;
-    fn(node);
-    for (const c of node.children) walk(c, fn);
-  };
-  const byId = (id) => {
-    let hit = null;
-    walk(html, (n) => { if (!hit && n.id === id) hit = n; });
-    return hit;
-  };
-  Object.assign(sandbox.document, {
-    body,
-    head,
-    documentElement: html,
-    createElement: (tag) => makeFakeElement(tag),
-    getElementById: (id) => byId(id),
-    // The bundle asks exactly one selector question (is the style tag already
-    // there?), so answer that one honestly and nothing else.
-    querySelector: (sel) => {
-      if (String(sel).indexOf('data-plugin-css') === -1) return null;
-      let found = null;
-      walk(html, (n) => { if (!found && n.dataset && n.dataset.pluginCss) found = n; });
-      return found;
-    },
-  });
-  return { html, head, body, byId };
-}
-function domText(el, out) {
-  out = out || [];
-  if (el == null) return out;
-  if (typeof el === 'string') { out.push(el); return out; }
-  if (el.textContent) out.push(String(el.textContent));
-  for (const c of el.children) domText(c, out);
-  return out;
-}
-function findDom(root, pred) {
-  let hit = null;
-  const walk = (node) => {
-    if (!node || hit) return;
-    if (pred(node)) { hit = node; return; }
-    for (const c of node.children) walk(c);
-  };
-  walk(root);
-  return hit;
-}
-
-// 1.11.0 removed the in-page overlay as an alert channel: every alert is a
-// system notification now. The card layer survives for one job — carrying
-// Approve / Reject where the desktop shell's toast cannot (desktopFallbackCard
-// owns that path) — so this suite pins what outlived the channel: ordinary
-// alerts draw nothing, the corner setting still applies, diagnostics report a
-// `card` block instead of a `channel`, and a config written by 1.10.x loads,
-// ignores its dead channel keys and self-cleans on the next write.
-async function cardLayer() {
-  console.log('\n— in-page card layer: approvals only —');
-  let dom = null;
-  let store = null;
-  const boot = (opts) => bootBundle({
-    withNotification: !!(opts && opts.withNotification),
-    extend(sandbox, windowStub) {
-      dom = installFakeDom(sandbox);
-      store = sandbox.localStorage;
-      sandbox.location = { origin: 'dsh-app://app', protocol: 'dsh-app:' };
-      // The bridge refuses to register without knowing this bundle's combo URL.
-      windowStub.__DSH_BOOT__ = { entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=abc' }] };
-      sandbox.navigator = {
-        serviceWorker: {
-          register() { return Promise.reject(new Error('allowServiceWorkers is off')); },
-          addEventListener() {},
-        },
-      };
-      if (opts && opts.seed) store.setItem('dshNotifyMe.config', JSON.stringify(opts.seed));
-      if (opts && opts.extend) opts.extend(sandbox);
-    },
-  });
-  const layer = () => dom.byId('dsh-notify-me-overlay');
-  const cards = () => (layer() ? layer().children.slice() : []);
-  const cardText = (card) => domText(card).join(' ');
-
-  // 1) An ordinary alert draws no card: the page is untouched and the system
-  //    notification is the only surface. This is the point of removing it.
-  const plain = boot({ withNotification: true });
-  const papi = plain.win.__dshNotifyMe;
-  papi.test('attention');
-  papi.test('done');
-  assert(!layer(), 'attention/done alerts draw no card, got ' + (layer() && layer().className));
-  assert(!!plain.lastNotification(), 'the system notification still fires');
-
-  // 2) An approval lands on the card — the desktop bridge is unusable here —
-  //    in the configured corner and with its buttons.
-  const b = boot({ withNotification: true });
-  const api = b.win.__dshNotifyMe;
-  // The bridge only registers once the plugin is mounted on a host context.
-  b.mod.apply(buildHost({ withSessionStatus: true, withWorkspace: true }).ctx);
-  await sleep(20); // the registration rejection lands on a promise tick
-  assert(String(api.debug().bridge).indexOf('failed:') === 0,
-    'the bridge really is unusable, got ' + api.debug().bridge);
-  api.test('approval');
-  assert(layer(), 'the approval card mounts');
-  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right',
-    'the default corner is bottom-right, got ' + layer().className);
-  assert(cards().length === 1, 'one card per approval, got ' + cards().length);
-  assert(cardText(cards()[0]).indexOf('测试审批') !== -1, 'the card carries the approval copy');
-  assert(findDom(cards()[0], (n) => n.className === 'dnm-ov-btn dnm-ov-approve'), 'the approve button is on the card');
-
-  // 3) The corner setting still moves the layer; nonsense falls back.
-  api.setConfig({ overlayCorner: 'top-left' });
-  assert(layer().className === 'dnm-ov-layer dnm-ov-top-left', 'the layer follows the corner setting');
-  api.setConfig({ overlayCorner: 'middle-of-nowhere' });
-  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'an unknown corner falls back to bottom-right');
-
-  // 4) Diagnostics report the card layer, not a channel.
-  const d = api.debug();
-  assert(!('channel' in d) && !('toast' in d) && !('overlay' in d),
-    'debug carries no channel block, got ' + JSON.stringify(Object.keys(d)));
-  assert(d.card && d.card.corner === 'bottom-right' && d.card.cards === 1,
-    'debug reports the live card state, got ' + JSON.stringify(d.card));
-
-  // 5) A config written by 1.10.x still loads: its channel keys are ignored (and
-  //    dropped by the next write) and they do not resurrect the old overlay.
-  const legacy = boot({ withNotification: true, seed: { channel: 'overlay', overlay: true, toast: false, enabled: true } });
-  const lapi = legacy.win.__dshNotifyMe;
-  assert(!('channel' in lapi.debug()), 'the legacy channel key is not read back');
-  lapi.test('attention');
-  assert(!!legacy.lastNotification(), 'the legacy config does not silence system notifications');
-  assert(!layer(), 'and it does not turn the old overlay back on');
-  lapi.setConfig({ volume: 0.5 });
-  const stored = JSON.parse(store.getItem('dshNotifyMe.config'));
-  assert(!('channel' in stored) && !('overlay' in stored) && !('toast' in stored),
-    'the next write scrubs the dead keys, got ' + JSON.stringify(stored));
-
-  // 6) An actionable card still fades on its own schedule instead of camping.
-  const delays = [];
-  const timed = boot({
-    withNotification: true,
-    extend(sandbox) {
-      const real = sandbox.setTimeout;
-      sandbox.setTimeout = (fn, ms) => { delays.push(ms); return real(fn, ms); };
-    },
-  });
-  await sleep(20);
-  timed.win.__dshNotifyMe.test('approval');
-  assert(delays.indexOf(12000) !== -1, 'an actionable card arms a 12s fade, got ' + JSON.stringify(delays));
-
-  console.log('card layer OK: alerts draw no cards, approvals do, corner + diagnostics + legacy config clean');
-}
-
-// ───────────── desktop shell: approvals decided on the in-page card ─────────
-// The desktop shell (location.protocol 'dsh-app:') cannot register the Service
-// Worker that OS action buttons need, so an approval toast there has nothing to
-// press. The alert therefore also drops a card into the same in-page layer, in
-// the same corner and with the same styling, whose buttons call decidePending()
-// — the exact path a Web toast button takes. The Web path (worker active) must
-// stay untouched, and the quick-decision switch still governs the buttons.
-async function desktopFallbackCard() {
-  console.log('\n— desktop shell: the approval card carries the buttons —');
-  let dom = null;
-  const useFakeDom = (sandbox, windowStub) => {
-    dom = installFakeDom(sandbox);
-    sandbox.location = { origin: 'dsh-app://app', protocol: 'dsh-app:' };
-    // The bridge refuses to register without knowing this bundle's combo URL.
-    windowStub.__DSH_BOOT__ = { entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=abc' }] };
-  };
-  // The host has no allowServiceWorkers privilege: registration never resolves
-  // to an active worker, exactly like the shipped Electron shell.
-  const failingWorker = (sandbox) => {
-    sandbox.navigator = {
-      serviceWorker: {
-        register() { return Promise.reject(new Error('allowServiceWorkers is off')); },
-        addEventListener() {},
-      },
-    };
-  };
-  const boot = (opts) => bootBundle({
-    withNotification: !!(opts && opts.withNotification),
-    extend(sandbox, windowStub) {
-      useFakeDom(sandbox, windowStub);
-      failingWorker(sandbox);
-      if (opts && opts.extend) opts.extend(sandbox, windowStub);
-    },
-  });
-  const layer = () => dom.byId('dsh-notify-me-overlay');
-  const cards = () => (layer() ? layer().children.slice() : []);
-  const cardText = (card) => domText(card).join(' ');
-  const button = (root, cls) => findDom(root, (n) => n.className === 'dnm-ov-btn ' + cls);
-  const attach = (b) => {
-    const host = buildHost({ withSessionStatus: true, withWorkspace: true });
-    b.mod.apply(host.ctx);
-    return host;
-  };
-
-  // 1) An approval while the page is away: the toast still fires (the channel
-  //    did not change) and the card carries the two decisions in the corner.
-  const b = boot({ withNotification: true });
-  const host = attach(b);
-  await sleep(20); // the registration rejection lands on a promise tick
-  const api = b.win.__dshNotifyMe;
-  assert(String(api.debug().bridge).indexOf('failed:') === 0,
-    'the shell cannot register a worker, got ' + api.debug().bridge);
-  b.doc.hidden = true; b.doc.visibilityState = 'hidden';
-  const answers = [];
-  host.setStatus(new Map([['s1', statusRow(answerableApproval('approval:300', null, answers))]]));
-  host.notifyStatus();
-  await sleep(20);
-
-  const toast = b.lastNotification();
-  assert(toast && toast.title.indexOf('审批') !== -1, 'the system toast still fires: the channel did not change');
-  assert(layer(), 'the fallback card mounts in the window corner');
-  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'it reuses the overlay layer corner, got ' + layer().className);
-  assert(cards().length === 1, 'one card per waiting approval, got ' + cards().length);
-  const card = cards()[0];
-  assert(card.className.indexOf('dnm-ov-attention') !== -1, 'it reuses the overlay attention styling, got ' + card.className);
-  assert(card.getAttribute('role') === 'alert', 'the card is announced as an alert');
-  assert(cardText(card).indexOf('needs elevated shell') !== -1, 'the card carries the approval details');
-  const approve = button(card, 'dnm-ov-approve');
-  const reject = button(card, 'dnm-ov-reject');
-  assert(approve && approve.textContent === '同意', 'the card carries 同意');
-  assert(reject && reject.textContent === '拒绝', 'the card carries 拒绝');
-
-  // The body is clamped by CSS; a 详情 toggle opens it in place.
-  const more = findDom(card, (n) => n.className === 'dnm-ov-more');
-  assert(more && more.textContent === '详情' && more.getAttribute('aria-expanded') === 'false',
-    'the card starts with its details folded');
-  more.onclick();
-  assert(card.className.indexOf('dnm-ov-open') !== -1 && more.getAttribute('aria-expanded') === 'true',
-    '详情 expands the body');
-  assert(more.textContent === '收起', 'the toggle switches to 收起');
-  more.onclick();
-  assert(card.className.indexOf('dnm-ov-open') === -1, '收起 folds the body back');
-
-  // A click on the card is a look, not a decision: the card must stay.
-  card.onclick();
-  assert(cards().length === 1, 'clicking the card does not take an unanswered approval down');
-
-  // 2) 同意 runs the same decidePending() chain a worker button press runs.
-  approve.onclick();
-  await sleep(20);
-  assert(answers.length === 1 && answers[0] === 'allowed-once',
-    'the card button answers the live approval, got ' + JSON.stringify(answers));
-  assert(cards().length === 0, 'the settled card is removed');
-  assert(api.debug().actionKeys.length === 0, 'no pending action is left behind');
-  assert(b.events.some((e) => e.kind === 'decision' && e.key === 'approval:300' && e.outcome === 'allowed-once'),
-    'the decision reaches onEvent listeners like a toast button press');
-
-  // 3) 拒绝 is the other decision, on its own card.
-  const rejected = [];
-  host.setStatus(new Map([['s1', statusRow(answerableApproval('approval:301', null, rejected))]]));
-  host.notifyStatus();
-  await sleep(20);
-  assert(cards().length === 1, 'the next approval draws its own card');
-  button(cards()[0], 'dnm-ov-reject').onclick();
-  await sleep(20);
-  assert(rejected.length === 1 && rejected[0] === 'rejected',
-    'the reject button rejects, got ' + JSON.stringify(rejected));
-  assert(cards().length === 0, 'the rejected card is removed');
-
-  // 4) A wait that ends elsewhere takes its card down too (unmarkAttention).
-  host.setStatus(new Map([['s1', statusRow(answerableApproval('approval:302', null, []))]]));
-  host.notifyStatus();
-  await sleep(20);
-  assert(cards().length === 1, 'a waiting approval owns a card');
-  host.setStatus(new Map());
-  host.notifyStatus();
-  await sleep(20);
-  assert(cards().length === 0, 'the card leaves when the wait ends elsewhere');
-
-  // 5) One card per approval key: a second delivery for the same key must not
-  //    stack. The test key is "test:approval:<now>", so a frozen clock makes two
-  //    presses collide on one key deterministically.
-  const dup = bootBundle({
-    extend(sandbox, windowStub) {
-      useFakeDom(sandbox, windowStub);
-      failingWorker(sandbox);
-      sandbox.Date = class extends Date { static now() { return 1700000000000; } };
-    },
-  });
-  attach(dup);
-  await sleep(20);
-  dup.win.__dshNotifyMe.test('approval');
-  dup.win.__dshNotifyMe.test('approval');
-  assert(cards().length === 1, 'the same approval key never stacks a second card, got ' + cards().length);
-  assert(dup.win.__dshNotifyMe.debug().actionKeys.length === 1, 'the duplicate leaves one pending action');
-
-  // 6) The quick-decision switch still governs the card: off means nothing to
-  //    press, and no extra card — the alert is a plain toast, like the Web path.
-  const off = boot({ withNotification: true });
-  const offHost = attach(off);
-  await sleep(20);
-  off.win.__dshNotifyMe.setConfig({ quickActions: false });
-  off.doc.hidden = true; off.doc.visibilityState = 'hidden';
-  offHost.setStatus(new Map([['s1', statusRow(answerableApproval('approval:400', null, []))]]));
-  offHost.notifyStatus();
-  await sleep(20);
-  const offToast = off.lastNotification();
-  assert(offToast && offToast.title.indexOf('审批') !== -1, 'the alert is still raised as a plain toast');
-  assert(!layer(), 'with quick decisions off no fallback card is drawn');
-  assert(!findDom(dom.body, (n) => n.className === 'dnm-ov-btn dnm-ov-approve' || n.className === 'dnm-ov-btn dnm-ov-reject'),
-    'and no approve/reject button exists');
-
-  // 7) The card reuses the overlay's 12s budget; a click must not cut it short.
-  const delays = [];
-  const timed = bootBundle({
-    extend(sandbox, windowStub) {
-      useFakeDom(sandbox, windowStub);
-      failingWorker(sandbox);
-      sandbox.setTimeout = (fn, ms) => { delays.push({ fn, ms }); return 0; };
-      sandbox.clearTimeout = () => {};
-    },
-  });
-  const timedHost = attach(timed);
-  await sleep(20);
-  timed.doc.hidden = true; timed.doc.visibilityState = 'hidden';
-  timedHost.setStatus(new Map([['s1', statusRow(answerableApproval('approval:500', null, []))]]));
-  timedHost.notifyStatus();
-  assert(cards().length === 1, 'the timed fallback card is up');
-  const actionTimer = delays.filter((d) => d.ms === 12000);
-  assert(actionTimer.length === 1, 'the fallback card reuses the 12s overlay budget, got ' + JSON.stringify(delays.map((d) => d.ms)));
-  cards()[0].onclick();
-  assert(cards().length === 1, 'a look does not shorten the 12s');
-  actionTimer[0].fn();
-  assert(cards().length === 0, 'the card fades when the 12s budget ends');
-
-  // 8) Web untouched: with the worker up the approval stays on the OS toast and
-  //    nothing is drawn into the page, even though this page has a DOM.
-  const web = bootBundle({
-    withNotification: true,
-    extend(sandbox, windowStub) {
-      dom = installFakeDom(sandbox);
-      windowStub.__DSH_BOOT__ = { entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=abc' }] };
-      sandbox.navigator = {
-        serviceWorker: {
-          register() {
-            return Promise.resolve({ active: {}, showNotification() {}, getNotifications() { return []; } });
-          },
-          addEventListener() {},
-        },
-      };
-    },
-  });
-  const webHost = attach(web);
-  await sleep(20);
-  assert(web.win.__dshNotifyMe.debug().bridge === 'active',
-    'the web worker is active, got ' + web.win.__dshNotifyMe.debug().bridge);
-  web.doc.hidden = true; web.doc.visibilityState = 'hidden';
-  webHost.setStatus(new Map([['s1', statusRow(answerableApproval('approval:600', null, []))]]));
-  webHost.notifyStatus();
-  await sleep(20);
-  assert(!layer() && cards().length === 0, 'an active worker keeps the approval on the OS toast: no page card');
-
-  console.log('desktop fallback OK: card + 同意/拒绝 + 详情, same 12s, switch-gated, web path unchanged');
-}
 
 function settingsAlertSetup() {
-  console.log('\n— settings page: no channel choice, card corner under quick decisions —');
+  console.log('\n— settings page: no channel choice, no approval card —');
   const base = settingsBoot();
   assert(base.text.indexOf('浮层提醒') === -1, 'the overlay channel option is gone');
   assert(base.text.indexOf('通知类型') === -1, 'the alert-type row is gone');
   assert(base.text.indexOf('两个只能选一个') === -1, 'the pick-one hint is gone');
   assert(base.findAll((n) => n.props && n.props.role === 'radio').length === 0,
     'no segmented channel control is left behind');
+  // 1.12.0 removed the desktop approval card outright: approvals are system
+  // notifications now, so there is no card corner to configure and no row for it.
+  assert(base.text.indexOf('审批卡片位置') === -1, 'no approval-card corner row');
   // The explanation hangs off the label text only — hovering a switch or a
   // slider must not pop a box the user did not ask for.
   const tips = base.findAll((n) => n.props && String(n.props.className || '').indexOf('dnm-rowTip') !== -1);
@@ -2708,32 +2328,20 @@ function settingsAlertSetup() {
   assert(tips.every((n) => String(n.props.className).indexOf('dnm-rowLabel') !== -1),
     'only the label text carries the tooltip');
 
-  // The card exists to carry approvals the Desktop toast cannot, so its corner
-  // hangs under the quick-decision switch and needs no extra click to reach.
-  const corner = base.find((n) => n.props && n.props['aria-label'] === '审批卡片位置');
-  assert(corner && corner.props.value === 'bottom-right',
-    'the approval-card corner select renders, got ' + (corner && corner.props.value));
-  assert(base.text.indexOf('桌面端审批卡片贴在') !== -1, 'the hint says what the card is for');
-  corner.props.onChange({ currentTarget: { value: 'top-left' } });
-  assert(base.configNow().overlayCorner === 'top-left', 'corner edits land in config');
-
-  // With quick decisions off there is no card, so its corner row goes away too.
   base.press('审批通知上直接裁决');
   assert(base.configNow().quickActions === false, 'the quick-decision switch persisted');
-  assert(!base.find((n) => n.props && n.props['aria-label'] === '审批卡片位置'),
-    'no corner row once quick decisions are off');
   base.cleanup();
 
   // A config written by 1.10.x still renders: the channel keys mean nothing now
   // and reading them back must not crash or silence anything.
-  const legacy = settingsBoot({ channel: 'overlay', overlay: true, toast: false });
+  const legacy = settingsBoot({ channel: 'overlay', overlay: true, overlayCorner: 'top-left', toast: false });
   assert(legacy.text.length > 0, 'a legacy channel config still renders the page');
   assert(legacy.configNow().channel === undefined && legacy.configNow().overlay === undefined,
     'readConfig scrubs the dead channel keys, got ' + JSON.stringify(legacy.configNow().channel));
-  assert(legacy.text.indexOf('审批卡片位置') !== -1, 'the card-corner row still renders for it');
+  assert(legacy.configNow().overlayCorner === undefined, 'the dead card-corner key is scrubbed too');
   legacy.cleanup();
 
-  console.log('alert setup OK: channel picker gone, card corner under quick decisions, legacy configs load');
+  console.log('alert setup OK: channel picker gone, card corner gone, legacy configs load');
 }
 
 // A window that is merely covered is still "visible" to the browser: the
@@ -2794,6 +2402,147 @@ async function awayWithoutHiding() {
   console.log('window-focus OK: blur counts as background, refocus silences again');
 }
 
+// Focus answers "is the window in front", not "is anyone there". A window left
+// in front while its owner walks off keeps focus forever, so the idle half of
+// the signal turns "no input for idleMinutes" into away as well.
+async function awayWhileFocusedAndIdle() {
+  console.log('\n— a focused window nobody has touched counts as away —');
+  const b = bootBundle({ withNotification: true });
+  const host = buildHost({ withUiSession: false });
+  host.setFace({ sessionId: 's1', running: false, pending: [], nodes: [], partial: null });
+  const { mod, win, events } = b;
+  mod.apply(host.ctx);
+  win.__dshNotifyMe.onEvent = (kind, payload) => events.push({ kind, ...payload });
+  win.__dshNotifyMe.setConfig({ sound: false, language: 'zh', enabled: true, donePolicy: 'background', idleMinutes: 0.0005 });
+  host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+
+  // Focus stays on the whole time; only the input clock runs out.
+  await sleep(200);
+  assert(win.__dshNotifyMe.debug().away === true, 'a focused page idle past idleMinutes reads as away');
+
+  events.length = 0;
+  host.setList({ ids: ['bg'], byId: { bg: { running: true, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  await sleep(400);
+  host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: true } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  assert(events.filter((e) => e.kind === 'done').length === 1, 'a finish reaches a user who left a focused window');
+
+  win.__dshNotifyMe.setConfig({ idleMinutes: 0 });
+  assert(win.__dshNotifyMe.debug().away === false, 'idleMinutes 0 restores the focus/visibility-only rule');
+  console.log('idle-away OK: a focused but untouched window counts as background');
+}
+
+// Going idle is the only "away" transition with no event behind it: the window
+// keeps focus and never hides, so the flush a blur normally triggers must run on
+// the idle clock instead. Otherwise a wait queued while the user was still at
+// the desk stays silent after they walk off — the exact case the policy is for.
+async function idleFlushesQuieted() {
+  console.log('\n— reaching the idle limit flushes the quieted approval queue —');
+  const b = bootBundle({ withNotification: true });
+  const host = buildHost({ withUiSession: false });
+  host.setFace({ sessionId: 's1', running: false, pending: [], nodes: [], partial: null });
+  const { mod, win, events } = b;
+  mod.apply(host.ctx);
+  win.__dshNotifyMe.onEvent = (kind, payload) => events.push({ kind, ...payload });
+  win.__dshNotifyMe.setConfig({
+    sound: false, language: 'zh', enabled: true,
+    currentHiddenOnly: true, attentionHiddenOnly: false, idleMinutes: 0.0005,
+  });
+  events.length = 0;
+  host.setFace({ ...host.faceSnap(), running: true, pending: [approval('a:idle1')] });
+  host.notifyFace();
+  assert(events.length === 0, 'the on-screen approval stays quiet while the user is present');
+
+  await sleep(150);
+  assert(win.__dshNotifyMe.debug().away === true, 'the idle clock has run out, got away=' + win.__dshNotifyMe.debug().away);
+  assert(events.filter((e) => e.kind === 'attention').length === 1,
+    'running out the idle clock re-delivers the quieted approval, got ' + JSON.stringify(events));
+  assert(!!b.lastNotification(), 'the re-delivery is a real notification');
+
+  // Drained, not repeated: the queue must not fire again on the next check.
+  await sleep(150);
+  assert(events.filter((e) => e.kind === 'attention').length === 1, 'the flush drains the queue instead of repeating it');
+  console.log('idle-flush OK: an expiry with no event still re-delivers the wait');
+}
+
+// Which conversation finished decides the alert under "smart": the one on
+// screen is already being read, the ones behind it are news.
+async function donePolicyScopes() {
+  console.log('\n— "who finished" decides, not just page visibility —');
+  const b = bootBundle({ withNotification: true });
+  const host = buildHost({ withUiSession: false });
+  host.setFace({ sessionId: 's1', running: false, pending: [], nodes: [], partial: null });
+  const { mod, win, events } = b;
+  mod.apply(host.ctx);
+  win.__dshNotifyMe.onEvent = (kind, payload) => events.push({ kind, ...payload });
+  win.__dshNotifyMe.setConfig({ sound: false, language: 'zh', enabled: true, idleMinutes: 0, donePolicy: 'smart' });
+  host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+  host.notifyList();
+  host.notifyFace();
+
+  const finishOther = async () => {
+    host.setList({ ids: ['bg'], byId: { bg: { running: true, displayTitle: '后台任务', completed: false } }, current: 's1', phase: 'ready' });
+    host.notifyList();
+    await sleep(400);
+    host.setList({ ids: ['bg'], byId: { bg: { running: false, displayTitle: '后台任务', completed: true } }, current: 's1', phase: 'ready' });
+    host.notifyList();
+  };
+  const finishCurrent = async () => {
+    host.setFace({ ...host.faceSnap(), running: true });
+    host.notifyFace();
+    await sleep(400);
+    host.setFace({ ...host.faceSnap(), running: false });
+    host.notifyFace();
+  };
+
+  events.length = 0;
+  await finishOther();
+  assert(events.filter((e) => e.kind === 'done').length === 1, 'smart: another conversation finishing while visible still alerts');
+
+  events.length = 0;
+  await finishCurrent();
+  assert(events.filter((e) => e.kind === 'done').length === 0, 'smart: the conversation on screen stays quiet');
+
+  win.__dshNotifyMe.setConfig({ donePolicy: 'background' });
+  events.length = 0;
+  await finishOther();
+  assert(events.filter((e) => e.kind === 'done').length === 0, 'background: a visible page stays quiet for any finish');
+
+  win.__dshNotifyMe.setConfig({ donePolicy: 'always' });
+  events.length = 0;
+  await finishCurrent();
+  assert(events.filter((e) => e.kind === 'done').length === 1, 'always: even the conversation on screen alerts');
+  console.log('done-policy OK: background / smart / always behave as advertised');
+}
+
+// Whether a toast clears itself, and whether that depends on being present.
+async function autoDismissPolicy() {
+  console.log('\n— a toast that clears itself must not erase an unseen alert —');
+  const raised = async (cfg, hidden) => {
+    const b = bootBundle({ withNotification: true });
+    const host = buildHost({ withUiSession: false });
+    host.setFace({ sessionId: 's1', running: false, pending: [], nodes: [], partial: null });
+    const { mod, win, doc } = b;
+    mod.apply(host.ctx);
+    win.__dshNotifyMe.setConfig(Object.assign({ sound: false, language: 'zh', enabled: true }, cfg));
+    doc.hidden = hidden;
+    doc.visibilityState = hidden ? 'hidden' : 'visible';
+    win.__dshNotifyMe.test('done');
+    const n = b.lastNotification();
+    assert(n, 'a toast was raised for the dismiss case');
+    await sleep(5200);
+    return n.closed;
+  };
+
+  assert(await raised({ autoDismiss: 'never' }, false) === false, 'never: the toast waits for the user to dismiss it');
+  assert(await raised({ autoDismiss: 'always' }, true) === true, 'always: the toast clears even while away');
+  assert(await raised({ autoDismiss: 'present' }, true) === false, 'present: a toast raised while away is kept');
+  assert(await raised({ autoDismiss: 'present' }, false) === true, 'present: a toast in front still clears itself');
+  console.log('auto-dismiss OK: kept while away, cleared while present, or fixed either way');
+}
+
 (async () => {
   await legacyHost();
   await currentHost();
@@ -2807,11 +2556,13 @@ async function awayWithoutHiding() {
   settingsSoundRows();
   await externalWebhooks();
   await settingsExternalRows();
-  await cardLayer();
-  await desktopFallbackCard();
   settingsAlertSetup();
   await listChangeDerivation();
   await awayWithoutHiding();
+  await awayWhileFocusedAndIdle();
+  await idleFlushesQuieted();
+  await donePolicyScopes();
+  await autoDismissPolicy();
   console.log('\nALL SMOKE TESTS PASSED ✔');
   // Exit explicitly: marker-release timers stay armed on purpose (they mirror
   // browser behaviour) and would otherwise hold the loop open.

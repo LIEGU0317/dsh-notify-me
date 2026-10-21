@@ -24,11 +24,11 @@
 A notification plugin for DSH Web / Desktop, so you can keep full access off without watching the page all day.
 
 - **When input is needed:** approval, plan review, and questions trigger notifications, sound, and a title marker.
-- **When a background reply finishes:** return to the result; click the notification to open its conversation.
+- **When a background reply finishes:** return to the result; click the notification to open its conversation. Pick "background only", "quiet for the open one", or "always".
+- **When you walk off but the window stays in front:** over 3 minutes without input counts as away, and the alert still fires; a toast you have not seen is not closed on a timer before you return.
 - **When you leave your computer:** optionally forward alerts to Discord, Bark, Gotify, or your own webhook.
-- **When you do not watch the primary display:** system notifications only ever appear on the primary display; the Desktop approval card is drawn in the page and follows the DSH window onto whichever screen it is on (see [Secondary displays and the approval card](#secondary-displays-and-the-approval-card)).
 
-> Keep the page or desktop app running; backgrounding / minimizing is fine. System notifications require permission. Approval buttons need a Service Worker: Web (`http://127.0.0.1` or `https`) has one, the Desktop `dsh-app://` pages cannot register one, so their notifications carry no buttons and approvals are decided on a card in the window corner instead.
+> Keep the page or desktop app running; backgrounding / minimizing is fine. System notifications require permission. Approval buttons need a Service Worker: Web (`http://127.0.0.1` or `https`) has one, the Desktop `dsh-app://` pages cannot register one, so their notifications carry no buttons — click the notification to decide in the conversation.
 
 > 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert**, **external notifications**, **Discord / Bark / Gotify push** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
 
@@ -73,14 +73,14 @@ The Electron application manages the `desktop` profile. Do not change the Web co
 2. Open **Settings → Notify me**. Confirm that the section and plugin version at its foot appear, and leave the master switch and sound enabled.
 3. Click **Test "reply finished"** on the settings page. A test notification should appear and sound according to your cue settings. This local test does not forward to external endpoints and ignores the "while the window is in front" toggle.
 
-Web users can also test approval buttons. On Desktop the shell cannot register a Service Worker, so this test draws an in-page card with Approve / Reject in the window corner (since 1.10.4; earlier versions sent a plain notification).
+Web users can also test approval buttons. On Desktop the shell cannot register a Service Worker, so this test sends a plain notification without buttons — click it to open the conversation.
 
 **Optional console check** — in environments with DevTools, you can also run:
 
 ```js
 window.__dshNotifyMe.test("done")        // "reply finished" sample
 window.__dshNotifyMe.test("attention")   // "needs your input" sample
-window.__dshNotifyMe.test("approval")    // Approve / Reject with an active Web bridge; an in-page card on Desktop
+window.__dshNotifyMe.test("approval")    // Approve / Reject with an active Web bridge; a plain notification on Desktop
 window.__dshNotifyMe.debug()             // the bridge field reports the button channel: "active" = buttons work
 ```
 
@@ -102,11 +102,11 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 | Event | Default behavior |
 | --- | --- |
 | 🔔 Input needed | Alerts even in the foreground; the conversation on screen keeps only a title marker |
-| ✅ Reply finished | Alerts while the page is hidden / backgrounded |
+| ✅ Reply finished | Alerts while the page is hidden / backgrounded (or "quiet for the open one" / "always") |
 
-**Input needed** covers approval requests, plan review, and questions (`ask_user_question`). Approvals carry Approve / Reject: on Web as a system notification with buttons, on Desktop (which cannot register a Service Worker) as a card drawn in the window corner.
+**Input needed** covers approval requests, plan review, and questions (`ask_user_question`). The Approve / Reject buttons only exist on Web (they need a Service Worker); the Desktop cannot register one, so its notifications carry no buttons — click the notification to decide in the conversation.
 
-**Reply finished** also covers background sessions. A finished but unread session keeps the `✅ Reply finished ·` title marker until opened. Title markers are independent of the "while the window is in front" toggles.
+**Reply finished** also covers background sessions. A finished but unread session keeps the `✅ Reply finished ·` title marker until opened. Title markers are independent of the alert policy.
 
 > **Background** subagent child sessions are **not** alerted about by default: DSH lists each of them as its own session, but they are steps inside the parent conversation's turn, so an alert for them is only noise. The subagent session you have open is not part of this and alerts as usual. Settings → "Ignore subagent sessions" turns the mute off.
 
@@ -118,26 +118,14 @@ Open **Settings → Notify me**. The page runs as how you get told, when to aler
 
 - **Enable reminders**: master switch — off means no toasts, no sounds, and the tab title is left alone;
 - **Sound / Volume**: the switch is direct; the slider folds into that row — click the title (▸ turns into ▾) to reveal it. What it plays comes from Advanced → Alert sound;
-- **Decide approvals from the toast** (on by default): approvals carry Approve / Reject that settle the request in place. On Web that is a system notification with buttons; on Desktop `dsh-app://` cannot register a Service Worker, so the buttons are drawn on a card in the window corner (auto-dismissed after 12 s, one card per approval). Its corner comes from the Corner sub-row underneath — see [Secondary displays and the approval card](#secondary-displays-and-the-approval-card).
-
-### Secondary displays and the approval card
-
-Windows draws system notification banners on the primary display only. There is no setting in Windows and no API in the browser to aim one at another monitor, so with DSH parked on a second screen and the primary display unwatched, a toast is as good as not sent. That part is out of reach — the only thing that can show up on the other screen comes from inside the page.
-
-One thing does: the Desktop approval card. It is drawn in the DSH page, so it appears on whichever display the window sits on, and it carries Approve / Reject (Desktop toasts have no buttons).
-
-- **Position** — the Corner sub-row under "Decide approvals from the toast" shows the current value (bottom right by default); click it open (▸ turns into ▾), then pick top right / bottom right / top left / bottom left. Changes apply immediately;
-- **Approvals only** — plain "needs you" and "reply finished" alerts never draw a card; they are system notifications only;
-- **Lifetime** — an approval card retires after 12 s; clicking the card body opens its conversation. At most 4 cards stack at once;
-- **No notification permission needed** — this path touches no Service Worker and needs no permission.
-
-> 1.11.0 removed the "alert type" choice. The in-page overlay used to work as a standalone channel, but it is only visible while the DSH window is in front — and the moment an alert matters is exactly when the window is in the background. With the overlay chosen, backgrounding left only the sound and the tab marker, which is no alert at all.
+- **Decide approvals from the toast** (on by default): approvals carry Approve / Reject that settle the request in place. On Web that is a system notification with buttons; on Desktop `dsh-app://` cannot register a Service Worker, so the notification carries no buttons — click it to decide in the conversation. The line underneath states whether buttons are possible here.
 
 ### When to alert
 
-- **Also alert "needs you" while the window is in front** (on): turn it off to hear only once the window goes to the background — another app focused, the window covered, or minimized all count;
-- **Stay quiet for the conversation on screen** (on): a wait belonging to the conversation you are looking at keeps only the tab marker so the approval card stays readable; moving the window to the background restores alerts;
-- **Also alert "reply finished" while the window is in front** (off): by default only background finishes alert (a covered Desktop window counts as background since 1.10.5, not only a minimized one);
+- **Also alert "needs you" while the window is in front** (on): turn it off to hear only once the window goes to the background — another app focused, the window covered, or minimized all count. A window left in front while nobody touches it (3 minutes without input by default) also counts as background; `idleMinutes: 0` restores the window-only rule;
+- **Stay quiet for the conversation on screen** (on): a wait belonging to the conversation you are looking at keeps only the tab marker, so it does not interrupt what you are doing; moving the window to the background or going idle restores alerts;
+- **When "reply finished" alerts** (default "background only"): three choices. "Background only" is the old rule — alert when you are not watching the page; "quiet for the open one" stays silent only for the conversation on screen while any other conversation still alerts (useful with several open); "always" never suppresses. An old profile's "also alert reply finished while in front" switch migrates to this setting;
+- **Dismiss the toast automatically** (default "keep while away"): three choices. "Keep while away" only closes a toast a few seconds later while you are at the page, so one that arrived while you were away is still in the notification centre when you come back; "always close" is the old tidy-up; "never close" leaves plain toasts up until you dismiss one. Approvals keep their 12 s rule and are likewise not withdrawn while you are away;
 - **Ignore subagent sessions** (on): skip background sessions spawned by a subagent — the parent conversation covers them; the one you have open still alerts;
 - **Click a toast to open that conversation** (on): the click switches to the conversation that raised it; in a browser it also brings the window forward, while on the Desktop shell it is flaky — sometimes the window comes forward, sometimes only the conversation switches (see [How the Desktop window gets raised](#how-the-desktop-window-gets-raised)); with several tabs open only one is raised, and off means a click does nothing.
 
@@ -193,7 +181,6 @@ The last block inside Advanced. The page protocol is detected automatically to t
 ## How it alerts
 
 - **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; supported Web environments offer approval buttons, Desktop does not)
-- **Desktop approval card** — `dsh-app://` cannot put Approve / Reject on a toast, so approval alerts also drop a clickable card in the window corner; see [Secondary displays and the approval card](#secondary-displays-and-the-approval-card)
 - **Sound** — WebAudio beeps by default (distinct patterns for "needs you" vs "done"); each kind can instead play a picked audio file, or hand the sound over to the operating system's own notification sound
 - **Tab title marker** — while something is waiting on you, the tab title is prefixed with `🔔 Action needed · …` / `🔔 需要你 · …`; while a background session is **finished but unread**, with `✅ Reply finished · …` / `✅ 回复完成 · …`, gone once you open that session (or it starts running again). Both kinds can be up together, "needs you" first; a host title change is rebased under the markers
 - **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / custom webhook — so the push channel on your phone picks it up while you step away from the machine
@@ -225,7 +212,7 @@ Two traps are worth remembering: a package listed in `dsh.client.inject` that a 
 
 </details>
 
-`1.9.0` neither widens nor narrows that range: the settings page is plain React rendering over the existing CSS variables (every colour carries a fallback) and adds no host API. The overlay, title markers and window raising still go through the 1.7 / 1.8 paths, so **plugin entries stay compatible from 0.1.1-rc.2 through 0.2.1-rc.2**, and stepping back to an older host needs no config change. The only new surface is visual: the bell in the page header is the plugin's own SVG (`docs/brand/`).
+`1.9.0` neither widens nor narrows that range: the settings page is plain React rendering over the existing CSS variables (every colour carries a fallback) and adds no host API. The alerts, title markers and window raising still go through the 1.7 / 1.8 paths, so **plugin entries stay compatible from 0.1.1-rc.2 through 0.2.1-rc.2**, and stepping back to an older host needs no config change. The only new surface is visual: the bell in the page header is the plugin's own SVG (`docs/brand/`).
 
 ## Advanced: console configuration
 
@@ -240,17 +227,17 @@ window.__dshNotifyMe.setConfig({
   enabled: true,           // false = disable all reminders (master switch)
   language: "auto",        // 'auto' follow the UI | 'zh' | 'en'
   attentionHiddenOnly: false, // true = don't alert "needs you" while the page is visible
-  currentHiddenOnly: true,    // true = waits in the conversation on screen keep only the tab marker (replayed once backgrounded)
-  doneHiddenOnly: true,       // false = also alert "reply finished" while visible
+  currentHiddenOnly: true,    // true = waits in the conversation on screen keep only the tab marker (replayed once away)
+  donePolicy: "background",   // "reply finished" policy: 'background' only when away | 'smart' quiet only for the open one | 'always' always alert
+  idleMinutes: 3,             // minutes without pointer/keyboard input before a focused page counts as away (0 = off)
+  autoDismiss: "present",     // toast self-dismiss: 'present' keep while away | 'always' always close | 'never' never close
   ignoreSubagent: true,       // true = never alert for background subagent sessions (the open one is exempt)
-  quickActions: true,         // Approve / Reject on approval alerts
+  quickActions: true,         // Approve / Reject buttons on approval toasts
   sound: true,                // cue toggle (also governs the "system notification sound" mode)
   soundDone: "synth",         // "reply finished" cue source: 'synth' built-in | 'custom' picked file | 'system' OS sound
   soundAttention: "synth",    // "needs you" cue source, same values
   volume: 0.5,                // 0..1
   autoFocus: true,            // clicking a toast opens the conversation it came from
-  quickActions: true,         // Approve / Reject buttons on approval toasts
-  overlayCorner: "bottom-right", // Desktop approval card anchor: 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left'
   externalEnabled: false,     // external-notification forwarding master switch (default off: no endpoint, nothing is sent)
   externalAttention: true,    // forward "needs you" (exactly the same trigger rules as local alerts)
   externalDone: true,         // forward "reply finished"
@@ -287,7 +274,7 @@ The reminder core stays dependency-free and self-contained: notification copy re
 
 ### Quick decisions, and how they reach the agent
 
-Action buttons (`actions`) belong to persistent notifications shown through `ServiceWorkerRegistration.showNotification()`; passing `actions` to the `new Notification()` constructor throws a `TypeError`. That is a browser rule no plugin can route around, so the bundle holds two jobs in the same bytes: the page half registers the reminder factory as it always did, and the very same file is registered as a Service Worker whose only task is relaying which button was clicked back to the page. The decision itself happens in the page, through the same `PendingApproval.answer('allowed-once' | 'rejected')` the approval card uses — which is why "Approve" is exactly "Allow once" and nothing broader. The "raise a window and switch its conversation" part of a body click is scheduled on the worker half too: `client.focus()` raises exactly one window (a visible one first) and routes the conversation switch to that window alone, so several open DSH tabs never fight over focus or all switch at once.
+Action buttons (`actions`) belong to persistent notifications shown through `ServiceWorkerRegistration.showNotification()`; passing `actions` to the `new Notification()` constructor throws a `TypeError`. That is a browser rule no plugin can route around, so the bundle holds two jobs in the same bytes: the page half registers the reminder factory as it always did, and the very same file is registered as a Service Worker whose only task is relaying which button was clicked back to the page. The decision itself happens in the page, through the same `PendingApproval.answer('allowed-once' | 'rejected')` the conversation's approval prompt uses — which is why "Approve" is exactly "Allow once" and nothing broader. The "raise a window and switch its conversation" part of a body click is scheduled on the worker half too: `client.focus()` raises exactly one window (a visible one first) and routes the conversation switch to that window alone, so several open DSH tabs never fight over focus or all switch at once.
 
 Every button toast is booked against its interaction key, so it can only decide the request it was raised for. Once the page answers that request or a newer one replaces it, clicking the leftover buttons decides nothing and just closes the notification. Button toasts stay 12s (plain ones 5s) and retire on their own, so an approval left undecided there still waits for you in the page.
 
@@ -312,7 +299,7 @@ There is no page-side fallback either: the shell preload only exposes `dshDeskto
 - The first sound/toast of each page load needs one user click on the page first (browser autoplay + permission policy).
 - Toasts are only produced once the notification permission is granted; declining means sound + title marker only.
 - On the Desktop shell (DSH Desktop 0.2.1-rc.2 / Windows) a toast click does not reliably bring the window forward: sometimes it does, sometimes only the conversation switches. The plugin's `dsh://open` deep link on its own failed 3/3 in isolation (see [How the Desktop window gets raised](#how-the-desktop-window-gets-raised)), so when it does come forward it is most likely the OS/Chromium activating the app on the notification click itself ([discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446)).
-- System notification banners are drawn on the primary display only: Windows has no setting and Chromium no API to aim one at another monitor, so on a multi-monitor setup the second screen never receives them. The one thing that does reach another display is the Desktop approval card, drawn in the page and carried by the window; for plain alerts across screens, forward them to your phone with external notifications.
+- System notification banners are drawn on the primary display only: Windows has no setting and Chromium no API to aim one at another monitor, so on a multi-monitor setup the second screen never receives them. Forwarding to your phone with external notifications is the only route across screens (since 1.12.0 the page no longer draws an approval card).
 - Quick-decision buttons need a Service Worker: they work on `http://127.0.0.1` and `https`, not on plain `http://192.168.x.x`-style LAN addresses, and some browsers or desktop hosts never render notification buttons. **The Desktop (`dsh-app://`) is tested and cannot register a Service Worker**, so buttons never render there and approval toasts fall back to their buttonless form. The `bridge` field of `window.__dshNotifyMe.debug()` says why; everything else keeps working.
 - macOS: in the browser, alerts, sounds, the title marker and toast-click navigation carry no OS assumptions and work as on Windows. Two caveats: DSH Desktop (Electron) notifications require the app to be code-signed — unsigned builds simply emit no notification — and whether the official macOS build satisfies that is untested; and notification buttons on the macOS desktop host are likewise untested (the Windows desktop host is tested and renders none, see the line above), falling back to the buttonless form above.
 - Config lives in browser `localStorage`: switching browsers/devices or clearing site data returns to defaults (one-click restore in the Settings page).
@@ -328,7 +315,7 @@ There is no page-side fallback either: the shell preload only exposes `dshDeskto
 ```powershell
 node --check lib\client.js
 node --check lib\index.js
-node smoke\smoke-test.cjs        # offline state-machine test: three host generations + master switch + zh/en cases + the quick-decision bridge (worker half included)
+node smoke\smoke-test.cjs        # offline state-machine test: three host generations + master switch + zh/en cases + the quick-decision bridge (worker half included) + idle detection and toast self-dismiss
 node smoke\cordis-host-test.mjs  # real-cordis end-to-end (skips when no local DSH installation is found)
 npm pack --dry-run               # preview the published tarball
 ```
@@ -345,6 +332,7 @@ Contributors (by handle; the link points at the PR / issue they worked on):
 - [@Wh1stle05](https://github.com/Wh1stle05) — [#10](https://github.com/chromoany/dsh-notify-me/pull/10): the per-kind alert sound source (built-in synth / picked audio file / system notification sound, chosen independently for "needs you" and "reply done"), with its settings UI, fallback chain, tests and docs; the two refinements — a "system" preview sending a real test notification instead of doing nothing, and the fake React holding hook state by index across renders — come from the same PR.
 - [@yanzhaohui1999](https://github.com/yanzhaohui1999) — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14): the 482-session idle-page CPU report (pinning `currentSessionId()` rescanning the whole table per row, 5.9%~6.5% of CPU) and the fix (derive the on-screen session once per list change), with a red-then-green regression assertion — a 4-row and a 40-row list change must cost the same (upstream reported 7 vs 43, 5 vs 5 after).
 - [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi) — [#12](https://github.com/chromoany/dsh-notify-me/issues/12): the external-notification forwarding suggestion (Discord Webhook / Bark / Gotify / custom webhook) and its use case (1.7.0).
+- [@shrekcg](https://github.com/shrekcg) — [#16](https://github.com/chromoany/dsh-notify-me/pull/16): counting "in front but walked away" as away (`idleMinutes`, 3 minutes by default), deciding "reply finished" alerts by which conversation finished (`donePolicy`, three choices), the three-way toast self-dismiss policy (`autoDismiss`), with matching smoke cases and old-config migration; when it landed in 1.12.0 the maintainer added the idle-expiry replay for suppressed approvals, removed the leftover in-page approval card, and brought docs and version up to date.
 
 Attribution policy: external PRs are landed as maintainer commits — the original commit is not reused and no Co-authored-by trailer is added, so GitHub's contributors graph lists the maintainer only and contributors are credited above.
 

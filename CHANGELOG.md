@@ -2,6 +2,34 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.12.0] — 2026-10-21
+
+### 新增
+
+- **人走开但窗口没走也算离开**（来自 [#16](https://github.com/chromoany/dsh-notify-me/pull/16)，[@shrekcg](https://github.com/shrekcg)）：`idleMinutes`（默认 3 分钟，`0` 关掉）内没有任何键鼠输入，就把「窗口在前台」按离开处理——「需要你」照常提醒、「回复完成」按离开规则提醒、`autoDismiss: "present"` 也不再撤掉那条通知。此前只认窗口失焦 / 页面隐藏，人坐在桌前离开座位时一切都还是「你在看」。
+- **闲置到期会补发被压下的审批**（维护者补的）：`currentHiddenOnly` 把当前对话的等待只留标题标记时，原先只有失焦 / 页面隐藏事件才会补发；现在闲置定时器到期即补发，人离开但窗口没动也能收到。一次性触发，队列清空后不重复。
+- **「回复完成」提醒时机三选一**（#16）：`donePolicy` —— `"background"`（默认，旧行为）/ `"smart"`（屏幕上那条静默，别的对话完成照常提醒）/ `"always"`（从不静默），设置页「什么时候提醒」里换成下拉。
+- **通知自动消失三选一**（#16）：`autoDismiss` —— `"present"`（默认，只有你在页面时才计时关闭，离开时收到的留在通知中心）/ `"always"`（旧行为）/ `"never"`（普通通知等你点掉）。带「同意 / 拒绝」的审批通知仍按 12 秒走。
+
+### 移除
+
+- **页内审批卡片整条删掉**：1.11.0 删掉「浮层通道」后，桌面端还留着一张兜底卡片（`dsh-app://` 注册不了 Service Worker，审批按钮画在窗口角落）。结果是审批提醒**同时**弹系统通知和页内卡片——与「只留通知」的目标冲突，而且卡片只在窗口前台时看得见，需要提醒的时刻恰恰不在。现在 `drawOverlayCard` / `showFallbackApprovalCard` / `.dnm-ov-*` 样式 / 「审批卡片位置」设置子行 / `overlayCorner` 配置键 / `debug().card` 全部删除。桌面端的审批提醒就是普通系统通知，点通知回到对话里裁决。
+- 老配置里的 `overlayCorner` 在下次读配置时删掉，其余设置不受影响。
+- `window.__dshNotifyMe.debug()` 去掉 `card`；`doneHiddenOnly` 换成 `donePolicy` / `idleMinutes` / `autoDismiss` / `away`（`doneHiddenOnly` 作为读写别名保留，旧脚本仍能写）。
+
+### 迁移
+
+- 旧配置 `doneHiddenOnly: false` → `donePolicy: "always"`，其余 → `"background"`；写回时两者仍互相同步。
+- `idleMinutes` 默认 3；写 `0` 退回只看窗口失焦 / 页面隐藏。
+
+### 测试
+
+- 冒烟删掉 `cardLayer` / `desktopFallbackCard`，新增 `awayWhileFocusedAndIdle`、`idleFlushesQuieted`、`donePolicyScopes`、`autoDismissPolicy`；设置页用例改为断言「审批卡片位置」子行与旧通道选项都已消失、三档下拉落盘正确、旧配置仍能加载。
+
+### 文档
+
+- README 中英：设置清单换成三档下拉、补闲置判定与通知自收、删「副屏与审批卡片」整节、控制台示例同步、致谢加上 [@shrekcg](https://github.com/shrekcg) 与 #16。
+
 ## [1.11.0] — 2026-10-21
 
 ### 移除

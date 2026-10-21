@@ -2387,136 +2387,105 @@ function findDom(root, pred) {
   return hit;
 }
 
-function overlayChannel() {
-  console.log('\n— in-page overlay: draws on the window\'s own screen —');
+// 1.11.0 removed the in-page overlay as an alert channel: every alert is a
+// system notification now. The card layer survives for one job — carrying
+// Approve / Reject where the desktop shell's toast cannot (desktopFallbackCard
+// owns that path) — so this suite pins what outlived the channel: ordinary
+// alerts draw nothing, the corner setting still applies, diagnostics report a
+// `card` block instead of a `channel`, and a config written by 1.10.x loads,
+// ignores its dead channel keys and self-cleans on the next write.
+async function cardLayer() {
+  console.log('\n— in-page card layer: approvals only —');
   let dom = null;
+  let store = null;
   const boot = (opts) => bootBundle({
     withNotification: !!(opts && opts.withNotification),
-    extend(sandbox) { dom = installFakeDom(sandbox); },
+    extend(sandbox, windowStub) {
+      dom = installFakeDom(sandbox);
+      store = sandbox.localStorage;
+      sandbox.location = { origin: 'dsh-app://app', protocol: 'dsh-app:' };
+      // The bridge refuses to register without knowing this bundle's combo URL.
+      windowStub.__DSH_BOOT__ = { entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=abc' }] };
+      sandbox.navigator = {
+        serviceWorker: {
+          register() { return Promise.reject(new Error('allowServiceWorkers is off')); },
+          addEventListener() {},
+        },
+      };
+      if (opts && opts.seed) store.setItem('dshNotifyMe.config', JSON.stringify(opts.seed));
+      if (opts && opts.extend) opts.extend(sandbox);
+    },
   });
   const layer = () => dom.byId('dsh-notify-me-overlay');
   const cards = () => (layer() ? layer().children.slice() : []);
   const cardText = (card) => domText(card).join(' ');
 
-  // 1) Off by default: an alert draws nothing into the page at all.
-  const off = boot();
-  const apiOff = off.win.__dshNotifyMe;
-  apiOff.test('attention');
-  assert(!layer(), 'the default config leaves the page untouched');
-  assert(dom.body.children.length === 0, 'no layer node is created while the overlay is off');
+  // 1) An ordinary alert draws no card: the page is untouched and the system
+  //    notification is the only surface. This is the point of removing it.
+  const plain = boot({ withNotification: true });
+  const papi = plain.win.__dshNotifyMe;
+  papi.test('attention');
+  papi.test('done');
+  assert(!layer(), 'attention/done alerts draw no card, got ' + (layer() && layer().className));
+  assert(!!plain.lastNotification(), 'the system notification still fires');
 
-  // 2) On: one card, in the configured corner, carrying the alert copy.
-  const on = boot();
-  const api = on.win.__dshNotifyMe;
-  api.setConfig({ overlay: true });
-  api.test('attention');
-  assert(layer(), 'the fixed layer is mounted under <body>');
-  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'the layer sits in the default corner, got ' + layer().className);
-  assert(cards().length === 1, 'one attention card is stacked');
-  const first = cards()[0];
-  assert(first.className.indexOf('dnm-ov-attention') !== -1, 'the attention kind is styled, got ' + first.className);
-  assert(first.getAttribute('role') === 'alert', 'attention cards are announced as alerts');
-  assert(cardText(first).indexOf('提问') !== -1, 'the card carries the kind title');
-  assert(cardText(first).indexOf('测试提醒') !== -1, 'the card carries the body');
-  const closeBtn = findDom(first, (n) => n.className === 'dnm-ov-x');
-  assert(closeBtn && closeBtn.getAttribute('aria-label') === '关闭这条提醒', 'the close button is labelled');
+  // 2) An approval lands on the card — the desktop bridge is unusable here —
+  //    in the configured corner and with its buttons.
+  const b = boot({ withNotification: true });
+  const api = b.win.__dshNotifyMe;
+  // The bridge only registers once the plugin is mounted on a host context.
+  b.mod.apply(buildHost({ withSessionStatus: true, withWorkspace: true }).ctx);
+  await sleep(20); // the registration rejection lands on a promise tick
+  assert(String(api.debug().bridge).indexOf('failed:') === 0,
+    'the bridge really is unusable, got ' + api.debug().bridge);
+  api.test('approval');
+  assert(layer(), 'the approval card mounts');
+  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right',
+    'the default corner is bottom-right, got ' + layer().className);
+  assert(cards().length === 1, 'one card per approval, got ' + cards().length);
+  assert(cardText(cards()[0]).indexOf('测试审批') !== -1, 'the card carries the approval copy');
+  assert(findDom(cards()[0], (n) => n.className === 'dnm-ov-btn dnm-ov-approve'), 'the approve button is on the card');
 
-  // 3) Done vs attention styling, appended in order.
-  api.test('done');
-  assert(cards().length === 2, 'a second alert appends a second card');
-  assert(cards()[1].className.indexOf('dnm-ov-done') !== -1, 'the done kind is styled');
-
-  // 4) The corner follows the setting (and a nonsense value falls back).
+  // 3) The corner setting still moves the layer; nonsense falls back.
   api.setConfig({ overlayCorner: 'top-left' });
-  assert(layer().className === 'dnm-ov-layer dnm-ov-top-left', 'the layer moves with the corner setting, got ' + layer().className);
+  assert(layer().className === 'dnm-ov-layer dnm-ov-top-left', 'the layer follows the corner setting');
   api.setConfig({ overlayCorner: 'middle-of-nowhere' });
-  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'an unknown corner falls back to bottom-right, got ' + layer().className);
+  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'an unknown corner falls back to bottom-right');
 
-  // 5) The stack is capped so a burst cannot cover the window.
-  for (let i = 0; i < 6; i++) api.test('done');
-  assert(cards().length === 4, 'the stack caps at 4 cards, got ' + cards().length);
+  // 4) Diagnostics report the card layer, not a channel.
+  const d = api.debug();
+  assert(!('channel' in d) && !('toast' in d) && !('overlay' in d),
+    'debug carries no channel block, got ' + JSON.stringify(Object.keys(d)));
+  assert(d.card && d.card.corner === 'bottom-right' && d.card.cards === 1,
+    'debug reports the live card state, got ' + JSON.stringify(d.card));
 
-  // 6) A card click opens nothing it cannot here, but it always dismisses.
-  const clickable = cards()[cards().length - 1];
-  clickable.onclick();
-  assert(cards().length === 3, 'clicking a card dismisses it');
-  const x = findDom(cards()[0], (n) => n.className === 'dnm-ov-x');
-  x.onclick();
-  assert(cards().length === 2, 'the close button dismisses its card');
+  // 5) A config written by 1.10.x still loads: its channel keys are ignored (and
+  //    dropped by the next write) and they do not resurrect the old overlay.
+  const legacy = boot({ withNotification: true, seed: { channel: 'overlay', overlay: true, toast: false, enabled: true } });
+  const lapi = legacy.win.__dshNotifyMe;
+  assert(!('channel' in lapi.debug()), 'the legacy channel key is not read back');
+  lapi.test('attention');
+  assert(!!legacy.lastNotification(), 'the legacy config does not silence system notifications');
+  assert(!layer(), 'and it does not turn the old overlay back on');
+  lapi.setConfig({ volume: 0.5 });
+  const stored = JSON.parse(store.getItem('dshNotifyMe.config'));
+  assert(!('channel' in stored) && !('overlay' in stored) && !('toast' in stored),
+    'the next write scrubs the dead keys, got ' + JSON.stringify(stored));
 
-  // 7) Turning the option off takes the whole layer down at once.
-  api.setConfig({ overlay: false });
-  assert(!layer() && dom.body.children.length === 0, 'disabling the overlay removes the layer and its cards');
-
-  // 8) Approval buttons without any OS-notification support: the overlay is the
-  //    button channel the desktop shell needs (its dsh-app:// page cannot run
-  //    the Service Worker that OS action buttons require). testAlert('approval')
-  //    drives the same decidePending() chain the real buttons drive.
-  const desktopish = boot();
-  const dapi = desktopish.win.__dshNotifyMe;
-  assert(!('Notification' in desktopish.win), 'the case really has no Notification API');
-  dapi.setConfig({ overlay: true });
-  dapi.test('approval');
-  const approval = cards()[0];
-  assert(approval && cardText(approval).indexOf('测试审批') !== -1, 'the approval card renders');
-  const approve = findDom(approval, (n) => n.className === 'dnm-ov-btn dnm-ov-approve');
-  const reject = findDom(approval, (n) => n.className === 'dnm-ov-btn dnm-ov-reject');
-  assert(approve && approve.textContent === '同意', 'the approve button is there');
-  assert(reject && reject.textContent === '拒绝', 'the reject button is there');
-  assert(dapi.debug().actionKeys.length === 1, 'the pending action is registered before the press');
-  approve.onclick();
-  assert(dapi.debug().actionKeys.length === 0, 'pressing approve settles the pending action');
-  assert(desktopish.events.some((e) => e.kind === 'done' && String(e.body || '').indexOf('已模拟「同意」') !== -1),
-    'the press produced the approve feedback alert');
-  const feedback = cards().filter((c) => cardText(c).indexOf('已模拟「同意」') !== -1);
-  assert(feedback.length === 1, 'the feedback arrives as its own done card');
-  assert(cards().every((c) => cardText(c).indexOf('测试审批') === -1), 'the answered approval card is gone');
-
-  // 9) The diagnostics surface reports the channel, so "why is nothing drawn"
-  //    is answerable from the page.
-  const diag = boot();
-  const gapi = diag.win.__dshNotifyMe;
-  assert(gapi.debug().overlay.enabled === false, 'debug reports the overlay off by default');
-  gapi.setConfig({ overlay: true, overlayCorner: 'top-right' });
-  gapi.test('done');
-  const d = gapi.debug();
-  assert(d.overlay.enabled === true && d.overlay.corner === 'top-right' && d.overlay.cards === 1,
-    'debug reports the live overlay state, got ' + JSON.stringify(d.overlay));
-
-  // 10) One channel at a time: the overlay stays silent while toasts are the
-  //     chosen channel, and a toast is raised only when it is chosen.
-  const ex = boot({ withNotification: true });
-  const exApi = ex.win.__dshNotifyMe;
-  exApi.setConfig({ enabled: true, channel: 'overlay' });
-  exApi.test('attention');
-  assert(ex.lastNotification() === null, 'the overlay channel raises no system notification');
-  assert(layer() && cards().length === 1, 'the overlay channel still draws its card');
-  exApi.setConfig({ channel: 'toast' });
-  assert(!layer(), 'switching to toasts clears the overlay layer');
-  exApi.test('attention');
-  assert(!!ex.lastNotification(), 'the toast channel raises a system notification');
-
-  // 11) An approval card is not immortal: an unanswered one fades on its own
-  //     schedule instead of camping in the corner (the toast path behaves the
-  //     same way, see showToast's close timer).
+  // 6) An actionable card still fades on its own schedule instead of camping.
   const delays = [];
-  const timed = bootBundle({
+  const timed = boot({
+    withNotification: true,
     extend(sandbox) {
-      dom = installFakeDom(sandbox);
-      sandbox.setTimeout = (fn, ms) => { delays.push({ fn, ms }); return 0; };
-      sandbox.clearTimeout = () => {};
+      const real = sandbox.setTimeout;
+      sandbox.setTimeout = (fn, ms) => { delays.push(ms); return real(fn, ms); };
     },
   });
-  const tapi = timed.win.__dshNotifyMe;
-  tapi.setConfig({ channel: 'overlay', enabled: true });
-  tapi.test('approval');
-  assert(cards().length === 1, 'the approval card is up');
-  const actionTimer = delays.filter((d) => d.ms === 12000);
-  assert(actionTimer.length === 1, 'an actionable card arms a 12s fade, got ' + JSON.stringify(delays.map((d) => d.ms)));
-  actionTimer[0].fn();
-  assert(cards().length === 0, 'the actionable card dismisses itself when its timer fires');
+  await sleep(20);
+  timed.win.__dshNotifyMe.test('approval');
+  assert(delays.indexOf(12000) !== -1, 'an actionable card arms a 12s fade, got ' + JSON.stringify(delays));
 
-  console.log('overlay OK: default off, one card per alert, corner + cap + dismissal, approval buttons settle without a worker');
+  console.log('card layer OK: alerts draw no cards, approvals do, corner + diagnostics + legacy config clean');
 }
 
 // ───────────── desktop shell: approvals decided on the in-page card ─────────
@@ -2724,73 +2693,47 @@ async function desktopFallbackCard() {
   console.log('desktop fallback OK: card + 同意/拒绝 + 详情, same 12s, switch-gated, web path unchanged');
 }
 
-function settingsOverlayRows() {
-  console.log('\n\u2014 settings page: alert channel choice \u2014');
+function settingsAlertSetup() {
+  console.log('\n— settings page: no channel choice, card corner under quick decisions —');
   const base = settingsBoot();
-  assert(base.text.indexOf('浮层提醒') !== -1, 'the overlay channel option renders');
-  assert(base.text.indexOf('系统通知只会出现在主屏') !== -1, 'the hint explains why the overlay exists');
+  assert(base.text.indexOf('浮层提醒') === -1, 'the overlay channel option is gone');
+  assert(base.text.indexOf('通知类型') === -1, 'the alert-type row is gone');
+  assert(base.text.indexOf('两个只能选一个') === -1, 'the pick-one hint is gone');
+  assert(base.findAll((n) => n.props && n.props.role === 'radio').length === 0,
+    'no segmented channel control is left behind');
   // The explanation hangs off the label text only — hovering a switch or a
   // slider must not pop a box the user did not ask for.
   const tips = base.findAll((n) => n.props && String(n.props.className || '').indexOf('dnm-rowTip') !== -1);
   assert(tips.length > 0, 'explained rows mark something as the tooltip target');
   assert(tips.every((n) => String(n.props.className).indexOf('dnm-rowLabel') !== -1),
     'only the label text carries the tooltip');
-  assert(tips.every((n) => typeof n.props.onMouseEnter === 'function' && n.props['data-dnm-tip']),
-    'the label owns the hover handlers and the text');
-  const rowTips = base.findAll((n) => /(^| )dnm-row( |$)/.test(String((n.props && n.props.className) || ''))
-    && String(n.props.className).indexOf('dnm-rowTip') !== -1);
-  assert(rowTips.length === 0, 'no whole row is a tooltip target');
 
-  // The two channels are a single choice, drawn as one segmented control: the
-  // active half is filled, the other stays flat.
-  const seg = base.findAll((n) => n.props && n.props.role === 'radio');
-  assert(seg.length === 2, 'exactly two options pick the alert channel, got ' + seg.length);
-  const toastBtn = base.find((n) => n.props && n.props.role === 'radio' && n.props['aria-label'] === '系统通知');
-  const overlayBtn = base.find((n) => n.props && n.props.role === 'radio' && n.props['aria-label'] === '浮层提醒');
-  assert(toastBtn && toastBtn.props['aria-checked'] === 'true', 'system notifications are the default channel');
-  assert(overlayBtn && overlayBtn.props['aria-checked'] === 'false', 'the overlay starts unselected');
-  assert(toastBtn.props.className.indexOf('on') !== -1 && overlayBtn.props.className.indexOf('on') === -1,
-    'only the active half is filled in');
-  assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
-    'no corner select while the overlay is off');
-
-  base.press('浮层提醒');
-  assert(base.configNow().channel === 'overlay' && base.configNow().overlay === true,
-    'picking the overlay persists the channel, got ' + JSON.stringify(base.configNow().channel));
-  assert(base.configNow().toast === false, 'the legacy mirrors follow the channel');
-  // The corner control is folded away: the row has to be clicked open first.
-  const expand = (key) => {
-    const node = base.find((n) => n.props && n.props['data-dnm-expand'] === key);
-    assert(node, 'the row exposes an expand toggle: ' + key);
-    node.props.onClick();
-    base.renderNow();
-  };
-  assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
-    'the corner select stays folded until the row is opened');
-  expand('overlayCorner');
-  const corner = base.find((n) => n.props && n.props['aria-label'] === '浮层位置');
-  assert(corner && corner.props.value === 'bottom-right', 'opening the row reveals the corner select');
-  assert(base.textNow().indexOf('左下') !== -1, 'the corner options are localized');
+  // The card exists to carry approvals the Desktop toast cannot, so its corner
+  // hangs under the quick-decision switch and needs no extra click to reach.
+  const corner = base.find((n) => n.props && n.props['aria-label'] === '审批卡片位置');
+  assert(corner && corner.props.value === 'bottom-right',
+    'the approval-card corner select renders, got ' + (corner && corner.props.value));
+  assert(base.text.indexOf('桌面端审批卡片贴在') !== -1, 'the hint says what the card is for');
   corner.props.onChange({ currentTarget: { value: 'top-left' } });
   assert(base.configNow().overlayCorner === 'top-left', 'corner edits land in config');
 
-  base.press('系统通知');
-  assert(base.configNow().channel === 'toast' && base.configNow().overlay === false,
-    'picking system notifications switches the channel back');
-  assert(!base.find((n) => n.props && n.props['aria-label'] === '浮层位置'),
-    'the corner select disappears again');
+  // With quick decisions off there is no card, so its corner row goes away too.
+  base.press('审批通知上直接裁决');
+  assert(base.configNow().quickActions === false, 'the quick-decision switch persisted');
+  assert(!base.find((n) => n.props && n.props['aria-label'] === '审批卡片位置'),
+    'no corner row once quick decisions are off');
   base.cleanup();
 
-  // A config written before the channel existed keeps its overlay setting.
-  const migrated = settingsBoot({ overlay: true });
-  assert(migrated.configNow().channel === 'overlay', 'a legacy overlay:true config migrates to the channel');
-  assert(migrated.text.indexOf('浮层上的「同意」同样等价于') !== -1,
-    'the approval-equivalence note renders');
-  assert(migrated.text.indexOf('快捷裁决按钮暂不可用') === -1,
-    'the overlay no longer reports buttons as unavailable');
-  migrated.cleanup();
+  // A config written by 1.10.x still renders: the channel keys mean nothing now
+  // and reading them back must not crash or silence anything.
+  const legacy = settingsBoot({ channel: 'overlay', overlay: true, toast: false });
+  assert(legacy.text.length > 0, 'a legacy channel config still renders the page');
+  assert(legacy.configNow().channel === undefined && legacy.configNow().overlay === undefined,
+    'readConfig scrubs the dead channel keys, got ' + JSON.stringify(legacy.configNow().channel));
+  assert(legacy.text.indexOf('审批卡片位置') !== -1, 'the card-corner row still renders for it');
+  legacy.cleanup();
 
-  console.log('channel rows OK: two exclusive radios, corner select only for the overlay, honest button hint');
+  console.log('alert setup OK: channel picker gone, card corner under quick decisions, legacy configs load');
 }
 
 // A window that is merely covered is still "visible" to the browser: the
@@ -2864,9 +2807,9 @@ async function awayWithoutHiding() {
   settingsSoundRows();
   await externalWebhooks();
   await settingsExternalRows();
-  overlayChannel();
+  await cardLayer();
   await desktopFallbackCard();
-  settingsOverlayRows();
+  settingsAlertSetup();
   await listChangeDerivation();
   await awayWithoutHiding();
   console.log('\nALL SMOKE TESTS PASSED ✔');

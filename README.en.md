@@ -74,7 +74,7 @@ The Electron application manages the `desktop` profile. Do not change the Web co
 ## First-use check
 
 1. Click once in the DSH page and allow notifications when prompted. If you previously declined, allow them in the browser's site settings. The operating system must also allow notifications from the browser / DSH Desktop.
-2. Open **Settings → Notify me**. Confirm that the section and plugin version at its foot appear, and leave the master switch, system notifications, and sound enabled.
+2. Open **Settings → Notify me**. Confirm that the section and plugin version at its foot appear, and leave the master switch, the alert type on system notifications, and sound enabled.
 3. Click **Test "reply finished"** on the settings page. A test notification should appear and sound according to your cue settings. This local test does not forward to external endpoints and ignores the "while the page is open" toggle.
 
 Web users can also test approval buttons. On Desktop that test sends a plain notification: **no Approve / Reject buttons is the expected result**.
@@ -123,7 +123,7 @@ Open **Settings → Notify me**. The page runs as how you get told, when to aler
 - **Enable reminders**: master switch — off means no toasts, no sounds, and the tab title is left alone;
 - **Alert type (pick one)**: one segmented control — system notifications on the left, in-page overlay on the right; whichever you pick is the only channel used;
   - **System notifications** (default): native toasts landing in the Windows / macOS notification center; needs notification permission;
-  - **In-page overlay**: cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. Click the row open to pick one of four corners when it is the chosen channel. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
+  - **In-page overlay**: cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. With the overlay chosen, a Corner row appears; open it to pick one of four positions. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
 - **Sound / Volume**: the switch is direct; the slider folds into that row — click the title (▸ turns into ▾) to reveal it. What it plays comes from Advanced → Alert sound;
 - **Decide approvals from the toast** (on by default): approval toasts carry Approve / Reject that settle the request in place. **Desktop notifications have no buttons** (`dsh-app://` cannot register a Service Worker) — pick the in-page overlay as the channel instead; the page states plainly which channel can carry buttons right now.
 
@@ -133,10 +133,10 @@ Windows draws system notification banners on the primary display only. There is 
 
 The **in-page overlay** skips the notification center and draws the card inside the DSH page instead: wherever the window is, the card is there too.
 
-- **Position** — click the In-page overlay row open (▸ turns into ▾), then pick top right / bottom right / top left / bottom left; the row shows the current value. Default bottom right, changes apply immediately;
+- **Position** — with the in-page overlay chosen, a Corner row appears showing the current value (bottom right by default); click it open (▸ turns into ▾), then pick top right / bottom right / top left / bottom left. Changes apply immediately;
 - **No notification permission needed** — it works when permission was never granted, and on the Desktop shell where buttonless toasts are all the OS channel can do;
 - **Approval cards carry Approve / Reject** — the same decision as Allow once / Reject on the approval card, and they work on the Desktop too (no Service Worker involved). Clicking the card body opens its conversation;
-- **Lifetime** — "needs you" cards retire after 12s, "reply finished" after 6s, and an approval card with buttons after 18s; a card or its close button retires one earlier. At most 4 cards stack at once;
+- **Lifetime** — "needs you" and "reply finished" cards retire after 5s each, an approval card with buttons after 12s (system toasts use the same two numbers); a card or its close button retires one earlier. At most 4 cards stack at once;
 - **Relation to system notifications** — it is one or the other. Both used to be switchable at once, which meant every alert arrived twice and the pair covered each other; 1.10.0 made it a single choice, and 1.10.2 turns that into one segmented row. An old config with the overlay on migrates to it.
 
 The overlay only knows which screen the window is on, not which screen you are looking at. If the window stays on the primary display while you watch another one, it stays invisible — same as a toast.
@@ -189,7 +189,7 @@ The last block inside Advanced. The page protocol is detected automatically to t
 <summary>Alert language, Desktop window raising, reset</summary>
 
 - **Alert language**: follow the UI / Simplified Chinese / English — governs alert copy and the `🔔 …` title marker;
-- **How the Desktop window is raised**: `window.focus()` cannot lift a native Electron window, so since 1.5.2 the page drives the app's own `dsh://open` deep link — it works even when the window is parked in the tray;
+- **How the Desktop window is raised**: `window.focus()` cannot lift a native Electron window, so since 1.5.2 the page drives the app's own `dsh://open` deep link — measured working on DSH Desktop 0.2.0-rc.2, flaky on 0.2.1-rc.2 / Windows (see the next section);
 - **Reset settings**: restores every switch and cue setting to the factory defaults (webhook targets and chosen audio files are kept).
 
 </details>
@@ -214,7 +214,7 @@ Per-release adaptation records live in [package.json](package.json), under `dsh.
 
 Verified to actually activate on `0.1.2-rc.1`, `0.1.5-rc.1`, `0.1.5-rc.2` and `0.2.0-rc.2` (each booted in its own profile: the plugin entry lands in the boot page's `__DSH_BOOT__` with its inject dependencies resolved, `/plugins/??dsh-notify-me/client.js&rev=…` serves a build containing the new code, and the Settings → Notifications section registers, i.e. the plugin's `apply` really runs), and previously on `0.1.1-rc.2`.
 
-`0.2.1-rc.2` (current latest) got its own isolated run: an isolated `DSH_HOME` booting `dsh web` (70 boot entries) placed the plugin entry 59th, in the `application` batch, with all three inject targets present and ordered before it; `/plugins/??dsh-notify-me/client.js&rev=…` served the 1.7.0 source build (140,153 B); loaded in a headless Chromium page, `apply` ran — `window.__dshNotifyMe.debug()` reported `uiSession: bound`, `uiSessionSource: sessionStatus`, `bridge: active`. Host-side shapes match `0.2.0-rc.2`; no plugin code change was needed.
+`0.2.1-rc.2` (current latest) got its own isolated run: an isolated `DSH_HOME` booting `dsh web` (70 boot entries) placed the plugin entry 59th, in the `application` batch, with all three inject targets present and ordered before it; `/plugins/??dsh-notify-me/client.js&rev=…` served the then-installed 1.7.0 source build (140,153 B); loaded in a headless Chromium page, `apply` ran — `window.__dshNotifyMe.debug()` reported `uiSession: bound`, `uiSessionSource: sessionStatus`, `bridge: active`. Host-side shapes match `0.2.0-rc.2`; no plugin code change was needed.
 
 <details>
 <summary>Host generations and adaptation diagnostics</summary>
@@ -298,7 +298,7 @@ The reminder core stays dependency-free and self-contained: notification copy re
 
 Action buttons (`actions`) belong to persistent notifications shown through `ServiceWorkerRegistration.showNotification()`; passing `actions` to the `new Notification()` constructor throws a `TypeError`. That is a browser rule no plugin can route around, so the bundle holds two jobs in the same bytes: the page half registers the reminder factory as it always did, and the very same file is registered as a Service Worker whose only task is relaying which button was clicked back to the page. The decision itself happens in the page, through the same `PendingApproval.answer('allowed-once' | 'rejected')` the approval card uses — which is why "Approve" is exactly "Allow once" and nothing broader. The "raise a window and switch its conversation" part of a body click is scheduled on the worker half too: `client.focus()` raises exactly one window (a visible one first) and routes the conversation switch to that window alone, so several open DSH tabs never fight over focus or all switch at once.
 
-Every button toast is booked against its interaction key, so it can only decide the request it was raised for. Once the page answers that request or a newer one replaces it, clicking the leftover buttons decides nothing and just closes the notification. Button toasts also skip the auto-dismiss timer: an undecided approval stays in the notification center until you settle it.
+Every button toast is booked against its interaction key, so it can only decide the request it was raised for. Once the page answers that request or a newer one replaces it, clicking the leftover buttons decides nothing and just closes the notification. Button toasts stay 12s (plain ones 5s) and retire on their own, so an approval left undecided there still waits for you in the page.
 
 ### How the Desktop window gets raised
 

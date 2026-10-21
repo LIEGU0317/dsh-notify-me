@@ -200,8 +200,9 @@ The last block inside Advanced. The page protocol is detected automatically to t
 
 ## How it alerts
 
-- **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; supported Web environments offer approval buttons, Desktop does not)
-- **In-page overlay** — an alert card drawn in the corner of the DSH page, on whatever display the window is on, optionally with Approve / Reject buttons; see [Secondary displays and the overlay](#secondary-displays-and-the-overlay)
+- **Alert channel (pick one — the two never run together)**:
+  - **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; supported Web environments offer approval buttons, Desktop does not)
+  - **In-page overlay** — an alert card drawn in the corner of the DSH page, on whatever display the window is on, optionally with Approve / Reject buttons; see [Secondary displays and the overlay](#secondary-displays-and-the-overlay)
 - **Sound** — WebAudio beeps by default (distinct patterns for "needs you" vs "done"); each kind can instead play a picked audio file, or hand the sound over to the operating system's own notification sound
 - **Tab title marker** — while something is waiting on you, the tab title is prefixed with `🔔 Action needed · …` / `🔔 需要你 · …`; while a background session is **finished but unread**, with `✅ Reply finished · …` / `✅ 回复完成 · …`, gone once you open that session (or it starts running again). Both kinds can be up together, "needs you" first; a host title change is rebased under the markers
 - **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / custom webhook — so the push channel on your phone picks it up while you step away from the machine

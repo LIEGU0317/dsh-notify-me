@@ -1798,6 +1798,46 @@ async function soundSources() {
   console.log('alert sound source OK: synth/system/custom dispatch, fallback, and reset all behave');
 }
 
+// ── issue #15: repeated toasts must not share a tag ────────────────────────
+// Electron ignores renotify:true, so a fixed per-kind tag made the second toast
+// of a kind silently replace the first instead of re-alerting. A counter plus a
+// timestamp gives every plain toast its own tag, while approvals keep the
+// stable attention-<key> tag that closeNotificationTag() looks up.
+function uniqueToastTags() {
+  console.log('\n— repeated toasts of one kind carry unique tags (issue #15) —');
+  const raised = [];
+  class CaptureNotification {
+    constructor(title, config) { this.title = title; this.config = config; raised.push(this); }
+    close() {}
+  }
+  CaptureNotification.permission = 'granted';
+  CaptureNotification.requestPermission = () => Promise.resolve('granted');
+  const b = bootBundle({
+    extend(sandbox, windowStub) {
+      // bootBundle only wires its own stub for withNotification, and that one
+      // keeps the last toast alone; this case needs every toast.
+      sandbox.Notification = CaptureNotification;
+      windowStub.Notification = CaptureNotification;
+    },
+  });
+  b.mod.apply({ effect(fn) { const dispose = fn(); return typeof dispose === 'function' ? dispose : () => {}; } });
+  const api = b.win.__dshNotifyMe;
+  api.test('done');
+  api.test('done');
+  api.test('done');
+  api.test('approval');
+
+  const doneTags = raised.slice(0, 3).map((n) => n.config.tag);
+  assert(doneTags.length === 3, 'three plain toasts were raised, got ' + raised.length);
+  assert(new Set(doneTags).size === 3, 'same-kind toasts get distinct tags, got ' + doneTags.join(', '));
+  assert(doneTags.every((tag) => /^dsh-notify-me-done-\d+-\d+$/.test(tag)),
+    'each tag keeps kind + counter + timestamp, got ' + doneTags.join(', '));
+  const approvalTag = raised[3] && raised[3].config.tag;
+  assert(typeof approvalTag === 'string' && approvalTag.indexOf('dsh-notify-me-attention-') === 0,
+    'approval toast keeps the stable attention tag that closeNotificationTag() looks up');
+  console.log('toast tags OK: done=' + doneTags.join(' | ') + ' approval=' + approvalTag);
+}
+
 // ── settings page: the new rows actually render ───────────────────────────
 // Hook state is kept per index and survives re-renders, the way React keeps it,
 // so a case can press a control and then read the copy the press produced.
@@ -2551,6 +2591,7 @@ function settingsOverlayRows() {
   await quickActionsHost();
   await desktopRaiseChannel();
   await soundSources();
+  uniqueToastTags();
   settingsSoundRows();
   await externalWebhooks();
   await settingsExternalRows();

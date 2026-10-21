@@ -138,6 +138,7 @@ The **in-page overlay** skips the notification center and draws the card inside 
 - **Approval cards carry Approve / Reject** — the same decision as Allow once / Reject on the approval card, and they work on the Desktop too (no Service Worker involved). Clicking the card body opens its conversation;
 - **Lifetime** — "needs you" and "reply finished" cards retire after 5s each, an approval card with buttons after 12s (system toasts use the same two numbers); a card or its close button retires one earlier. At most 4 cards stack at once;
 - **Relation to system notifications** — it is one or the other. Both used to be switchable at once, which meant every alert arrived twice and the pair covered each other; 1.10.0 made it a single choice, and 1.10.2 turns that into one segmented row. An old config with the overlay on migrates to it.
+- **System notification while the window is in the background** (on by default, since 1.10.6) — the card is drawn inside the page, so a window behind another app or minimized shows nothing and leaves only the sound. With this on, an alert arriving while the page is away is also raised as a system notification; back in front, the card is the only copy again. Turn it off to keep the overlay strictly in-page.
 
 The overlay only knows which screen the window is on, not which screen you are looking at. If the window stays on the primary display while you watch another one, it stays invisible — same as a toast.
 
@@ -261,6 +262,7 @@ window.__dshNotifyMe.setConfig({
   quickActions: true,         // Approve / Reject buttons on approval toasts
   overlay: false,             // legacy mirror kept in sync with channel (old configs migrate through it)
   overlayCorner: "bottom-right", // overlay anchor: 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left'
+  overlayAwayToast: true,     // overlay channel: also raise a system notification while the page is away (the only cross-channel exception)
   externalEnabled: false,     // external-notification forwarding master switch (default off: no endpoint, nothing is sent)
   externalAttention: true,    // forward "needs you" (exactly the same trigger rules as local alerts)
   externalDone: true,         // forward "reply finished"

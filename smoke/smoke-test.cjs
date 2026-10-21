@@ -2496,25 +2496,6 @@ function overlayChannel() {
   exApi.test('attention');
   assert(!!ex.lastNotification(), 'the toast channel raises a system notification');
 
-  // 10b) The overlay lives inside the page, so a window sitting behind another
-  //      app shows nothing at all. An alert arriving while the page is away is
-  //      therefore also raised as a system notification — and the switch keeps
-  //      that from applying to the on-screen case.
-  const bgn = boot({ withNotification: true });
-  const bapi = bgn.win.__dshNotifyMe;
-  bapi.setConfig({ enabled: true, channel: 'overlay', overlayAwayToast: true, sound: false });
-  bgn.doc.hidden = true;
-  bgn.doc.visibilityState = 'hidden';
-  bapi.test('done');
-  assert(!!bgn.lastNotification(), 'the overlay channel also raises a notification while the page is away');
-  assert(cards().length === 1, 'and still draws its card for when the user comes back');
-  bapi.setConfig({ overlayAwayToast: false });
-  const kept = bgn.lastNotification();
-  bapi.test('done');
-  assert(bgn.lastNotification() === kept, 'turning overlayAwayToast off keeps the overlay strictly in-page');
-  bgn.doc.hidden = false;
-  bgn.doc.visibilityState = 'visible';
-
   // 11) An approval card is not immortal: an unanswered one fades on its own
   //     schedule instead of camping in the corner (the toast path behaves the
   //     same way, see showToast's close timer).

@@ -2,6 +2,16 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.10.3] — 2026-10-21
+
+### 修复
+
+- **桌面端同类系统通知只弹第一条**（#15）：普通通知的 `tag` 原本按类别固定（`dsh-notify-me-<kind>`），靠 `renotify: true` 让同 tag 的新通知替换并重新提示；Electron 不认这个标志，同 tag 的第二条被静默替换，横幅不再出现。现改为每条普通通知独立 tag（`dsh-notify-me-<kind>-<seq>-<ts>`，计数器防同毫秒碰撞）。审批通知的 tag 保持稳定，`closeNotificationTag()` 撤回逻辑不变。
+
+### 测试
+
+- 冒烟新增 `uniqueToastTags()` 回归用例：连发三次「回复完成」断言三条 tag 互不相同、审批 tag 前缀不变；`npm test` 两套件通过。
+
 ## [1.10.2] — 2026-10-21
 
 ### 变更

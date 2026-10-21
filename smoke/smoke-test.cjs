@@ -2513,6 +2513,211 @@ function overlayChannel() {
   console.log('overlay OK: default off, one card per alert, corner + cap + dismissal, approval buttons settle without a worker');
 }
 
+// ───────────── desktop shell: approvals decided on the in-page card ─────────
+// The desktop shell (location.protocol 'dsh-app:') cannot register the Service
+// Worker that OS action buttons need, so an approval toast there has nothing to
+// press. The alert therefore also drops a card into the same in-page layer, in
+// the same corner and with the same styling, whose buttons call decidePending()
+// — the exact path a Web toast button takes. The Web path (worker active) must
+// stay untouched, and the quick-decision switch still governs the buttons.
+async function desktopFallbackCard() {
+  console.log('\n— desktop shell: the approval card carries the buttons —');
+  let dom = null;
+  const useFakeDom = (sandbox, windowStub) => {
+    dom = installFakeDom(sandbox);
+    sandbox.location = { origin: 'dsh-app://app', protocol: 'dsh-app:' };
+    // The bridge refuses to register without knowing this bundle's combo URL.
+    windowStub.__DSH_BOOT__ = { entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=abc' }] };
+  };
+  // The host has no allowServiceWorkers privilege: registration never resolves
+  // to an active worker, exactly like the shipped Electron shell.
+  const failingWorker = (sandbox) => {
+    sandbox.navigator = {
+      serviceWorker: {
+        register() { return Promise.reject(new Error('allowServiceWorkers is off')); },
+        addEventListener() {},
+      },
+    };
+  };
+  const boot = (opts) => bootBundle({
+    withNotification: !!(opts && opts.withNotification),
+    extend(sandbox, windowStub) {
+      useFakeDom(sandbox, windowStub);
+      failingWorker(sandbox);
+      if (opts && opts.extend) opts.extend(sandbox, windowStub);
+    },
+  });
+  const layer = () => dom.byId('dsh-notify-me-overlay');
+  const cards = () => (layer() ? layer().children.slice() : []);
+  const cardText = (card) => domText(card).join(' ');
+  const button = (root, cls) => findDom(root, (n) => n.className === 'dnm-ov-btn ' + cls);
+  const attach = (b) => {
+    const host = buildHost({ withSessionStatus: true, withWorkspace: true });
+    b.mod.apply(host.ctx);
+    return host;
+  };
+
+  // 1) An approval while the page is away: the toast still fires (the channel
+  //    did not change) and the card carries the two decisions in the corner.
+  const b = boot({ withNotification: true });
+  const host = attach(b);
+  await sleep(20); // the registration rejection lands on a promise tick
+  const api = b.win.__dshNotifyMe;
+  assert(String(api.debug().bridge).indexOf('failed:') === 0,
+    'the shell cannot register a worker, got ' + api.debug().bridge);
+  b.doc.hidden = true; b.doc.visibilityState = 'hidden';
+  const answers = [];
+  host.setStatus(new Map([['s1', statusRow(answerableApproval('approval:300', null, answers))]]));
+  host.notifyStatus();
+  await sleep(20);
+
+  const toast = b.lastNotification();
+  assert(toast && toast.title.indexOf('审批') !== -1, 'the system toast still fires: the channel did not change');
+  assert(layer(), 'the fallback card mounts in the window corner');
+  assert(layer().className === 'dnm-ov-layer dnm-ov-bottom-right', 'it reuses the overlay layer corner, got ' + layer().className);
+  assert(cards().length === 1, 'one card per waiting approval, got ' + cards().length);
+  const card = cards()[0];
+  assert(card.className.indexOf('dnm-ov-attention') !== -1, 'it reuses the overlay attention styling, got ' + card.className);
+  assert(card.getAttribute('role') === 'alert', 'the card is announced as an alert');
+  assert(cardText(card).indexOf('needs elevated shell') !== -1, 'the card carries the approval details');
+  const approve = button(card, 'dnm-ov-approve');
+  const reject = button(card, 'dnm-ov-reject');
+  assert(approve && approve.textContent === '同意', 'the card carries 同意');
+  assert(reject && reject.textContent === '拒绝', 'the card carries 拒绝');
+
+  // The body is clamped by CSS; a 详情 toggle opens it in place.
+  const more = findDom(card, (n) => n.className === 'dnm-ov-more');
+  assert(more && more.textContent === '详情' && more.getAttribute('aria-expanded') === 'false',
+    'the card starts with its details folded');
+  more.onclick();
+  assert(card.className.indexOf('dnm-ov-open') !== -1 && more.getAttribute('aria-expanded') === 'true',
+    '详情 expands the body');
+  assert(more.textContent === '收起', 'the toggle switches to 收起');
+  more.onclick();
+  assert(card.className.indexOf('dnm-ov-open') === -1, '收起 folds the body back');
+
+  // A click on the card is a look, not a decision: the card must stay.
+  card.onclick();
+  assert(cards().length === 1, 'clicking the card does not take an unanswered approval down');
+
+  // 2) 同意 runs the same decidePending() chain a worker button press runs.
+  approve.onclick();
+  await sleep(20);
+  assert(answers.length === 1 && answers[0] === 'allowed-once',
+    'the card button answers the live approval, got ' + JSON.stringify(answers));
+  assert(cards().length === 0, 'the settled card is removed');
+  assert(api.debug().actionKeys.length === 0, 'no pending action is left behind');
+  assert(b.events.some((e) => e.kind === 'decision' && e.key === 'approval:300' && e.outcome === 'allowed-once'),
+    'the decision reaches onEvent listeners like a toast button press');
+
+  // 3) 拒绝 is the other decision, on its own card.
+  const rejected = [];
+  host.setStatus(new Map([['s1', statusRow(answerableApproval('approval:301', null, rejected))]]));
+  host.notifyStatus();
+  await sleep(20);
+  assert(cards().length === 1, 'the next approval draws its own card');
+  button(cards()[0], 'dnm-ov-reject').onclick();
+  await sleep(20);
+  assert(rejected.length === 1 && rejected[0] === 'rejected',
+    'the reject button rejects, got ' + JSON.stringify(rejected));
+  assert(cards().length === 0, 'the rejected card is removed');
+
+  // 4) A wait that ends elsewhere takes its card down too (unmarkAttention).
+  host.setStatus(new Map([['s1', statusRow(answerableApproval('approval:302', null, []))]]));
+  host.notifyStatus();
+  await sleep(20);
+  assert(cards().length === 1, 'a waiting approval owns a card');
+  host.setStatus(new Map());
+  host.notifyStatus();
+  await sleep(20);
+  assert(cards().length === 0, 'the card leaves when the wait ends elsewhere');
+
+  // 5) One card per approval key: a second delivery for the same key must not
+  //    stack. The test key is "test:approval:<now>", so a frozen clock makes two
+  //    presses collide on one key deterministically.
+  const dup = bootBundle({
+    extend(sandbox, windowStub) {
+      useFakeDom(sandbox, windowStub);
+      failingWorker(sandbox);
+      sandbox.Date = class extends Date { static now() { return 1700000000000; } };
+    },
+  });
+  attach(dup);
+  await sleep(20);
+  dup.win.__dshNotifyMe.test('approval');
+  dup.win.__dshNotifyMe.test('approval');
+  assert(cards().length === 1, 'the same approval key never stacks a second card, got ' + cards().length);
+  assert(dup.win.__dshNotifyMe.debug().actionKeys.length === 1, 'the duplicate leaves one pending action');
+
+  // 6) The quick-decision switch still governs the card: off means nothing to
+  //    press, and no extra card — the alert is a plain toast, like the Web path.
+  const off = boot({ withNotification: true });
+  const offHost = attach(off);
+  await sleep(20);
+  off.win.__dshNotifyMe.setConfig({ quickActions: false });
+  off.doc.hidden = true; off.doc.visibilityState = 'hidden';
+  offHost.setStatus(new Map([['s1', statusRow(answerableApproval('approval:400', null, []))]]));
+  offHost.notifyStatus();
+  await sleep(20);
+  const offToast = off.lastNotification();
+  assert(offToast && offToast.title.indexOf('审批') !== -1, 'the alert is still raised as a plain toast');
+  assert(!layer(), 'with quick decisions off no fallback card is drawn');
+  assert(!findDom(dom.body, (n) => n.className === 'dnm-ov-btn dnm-ov-approve' || n.className === 'dnm-ov-btn dnm-ov-reject'),
+    'and no approve/reject button exists');
+
+  // 7) The card reuses the overlay's 12s budget; a click must not cut it short.
+  const delays = [];
+  const timed = bootBundle({
+    extend(sandbox, windowStub) {
+      useFakeDom(sandbox, windowStub);
+      failingWorker(sandbox);
+      sandbox.setTimeout = (fn, ms) => { delays.push({ fn, ms }); return 0; };
+      sandbox.clearTimeout = () => {};
+    },
+  });
+  const timedHost = attach(timed);
+  await sleep(20);
+  timed.doc.hidden = true; timed.doc.visibilityState = 'hidden';
+  timedHost.setStatus(new Map([['s1', statusRow(answerableApproval('approval:500', null, []))]]));
+  timedHost.notifyStatus();
+  assert(cards().length === 1, 'the timed fallback card is up');
+  const actionTimer = delays.filter((d) => d.ms === 12000);
+  assert(actionTimer.length === 1, 'the fallback card reuses the 12s overlay budget, got ' + JSON.stringify(delays.map((d) => d.ms)));
+  cards()[0].onclick();
+  assert(cards().length === 1, 'a look does not shorten the 12s');
+  actionTimer[0].fn();
+  assert(cards().length === 0, 'the card fades when the 12s budget ends');
+
+  // 8) Web untouched: with the worker up the approval stays on the OS toast and
+  //    nothing is drawn into the page, even though this page has a DOM.
+  const web = bootBundle({
+    withNotification: true,
+    extend(sandbox, windowStub) {
+      dom = installFakeDom(sandbox);
+      windowStub.__DSH_BOOT__ = { entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=abc' }] };
+      sandbox.navigator = {
+        serviceWorker: {
+          register() {
+            return Promise.resolve({ active: {}, showNotification() {}, getNotifications() { return []; } });
+          },
+          addEventListener() {},
+        },
+      };
+    },
+  });
+  const webHost = attach(web);
+  await sleep(20);
+  assert(web.win.__dshNotifyMe.debug().bridge === 'active',
+    'the web worker is active, got ' + web.win.__dshNotifyMe.debug().bridge);
+  web.doc.hidden = true; web.doc.visibilityState = 'hidden';
+  webHost.setStatus(new Map([['s1', statusRow(answerableApproval('approval:600', null, []))]]));
+  webHost.notifyStatus();
+  await sleep(20);
+  assert(!layer() && cards().length === 0, 'an active worker keeps the approval on the OS toast: no page card');
+
+  console.log('desktop fallback OK: card + 同意/拒绝 + 详情, same 12s, switch-gated, web path unchanged');
+}
+
 function settingsOverlayRows() {
   console.log('\n\u2014 settings page: alert channel choice \u2014');
   const base = settingsBoot();
@@ -2596,6 +2801,7 @@ function settingsOverlayRows() {
   await externalWebhooks();
   await settingsExternalRows();
   overlayChannel();
+  await desktopFallbackCard();
   settingsOverlayRows();
   await listChangeDerivation();
   console.log('\nALL SMOKE TESTS PASSED ✔');

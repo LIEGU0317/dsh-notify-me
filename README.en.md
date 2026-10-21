@@ -77,14 +77,14 @@ The Electron application manages the `desktop` profile. Do not change the Web co
 2. Open **Settings → Notify me**. Confirm that the section and plugin version at its foot appear, and leave the master switch, the alert type on system notifications, and sound enabled.
 3. Click **Test "reply finished"** on the settings page. A test notification should appear and sound according to your cue settings. This local test does not forward to external endpoints and ignores the "while the page is open" toggle.
 
-Web users can also test approval buttons. On Desktop that test sends a plain notification: **no Approve / Reject buttons is the expected result**.
+Web users can also test approval buttons. On Desktop the shell cannot register a Service Worker, so this test draws an in-page card with Approve / Reject in the window corner (since 1.10.4; earlier versions sent a plain notification).
 
 **Optional console check** — in environments with DevTools, you can also run:
 
 ```js
 window.__dshNotifyMe.test("done")        // "reply finished" sample
 window.__dshNotifyMe.test("attention")   // "needs your input" sample
-window.__dshNotifyMe.test("approval")    // Approve / Reject with an active Web bridge; buttonless on Desktop
+window.__dshNotifyMe.test("approval")    // Approve / Reject with an active Web bridge; an in-page card on Desktop
 window.__dshNotifyMe.debug()             // the bridge field reports the button channel: "active" = buttons work
 ```
 
@@ -108,7 +108,7 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 | 🔔 Input needed | Alerts even in the foreground; the conversation on screen keeps only a title marker |
 | ✅ Reply finished | Alerts while the page is hidden / backgrounded |
 
-**Input needed** covers approval requests, plan review, and questions (`ask_user_question`). Supported Web environments show Approve / Reject buttons; Desktop does not.
+**Input needed** covers approval requests, plan review, and questions (`ask_user_question`). Approvals carry Approve / Reject: on Web as a system notification with buttons, on Desktop (which cannot register a Service Worker) as a card drawn in the window corner.
 
 **Reply finished** also covers background sessions. A finished but unread session keeps the `✅ Reply finished ·` title marker until opened. Title markers are independent of the "while the page is open" toggles.
 
@@ -125,7 +125,7 @@ Open **Settings → Notify me**. The page runs as how you get told, when to aler
   - **System notifications** (default): native toasts landing in the Windows / macOS notification center; needs notification permission;
   - **In-page overlay**: cards drawn in the page corner, on whichever display the window sits on — system notifications only land on the primary display. No permission needed, and the Desktop shell can Approve / Reject right on the card. With the overlay chosen, a Corner row appears; open it to pick one of four positions. See [Secondary displays and the overlay](#secondary-displays-and-the-overlay);
 - **Sound / Volume**: the switch is direct; the slider folds into that row — click the title (▸ turns into ▾) to reveal it. What it plays comes from Advanced → Alert sound;
-- **Decide approvals from the toast** (on by default): approval toasts carry Approve / Reject that settle the request in place. **Desktop notifications have no buttons** (`dsh-app://` cannot register a Service Worker) — pick the in-page overlay as the channel instead; the page states plainly which channel can carry buttons right now.
+- **Decide approvals from the toast** (on by default): approvals carry Approve / Reject that settle the request in place. On Web that is a system notification with buttons; on Desktop `dsh-app://` cannot register a Service Worker, so the buttons are drawn on a card in the window corner (auto-dismissed after 12 s, one card per approval). You can also switch the channel to the in-page overlay and decide there.
 
 ### Secondary displays and the overlay
 

@@ -272,7 +272,7 @@ window.__dshNotifyMe.testExternal()               // explicit outbound test to v
 The reminder core watches session state and pending interactions. The page handles approval decisions; Desktop window activation uses a host route plus native Win32 calls.
 
 <details>
-<summary>Event sources, approval bridge, and Desktop window activation</summary>
+<summary>Event sources and graceful degradation</summary>
 
 The reminder core picks its interaction source per host generation (see the table above); the current session always comes from the client `sessions` service:
 
@@ -282,6 +282,8 @@ The reminder core picks its interaction source per host generation (see the tabl
 - **subagent sessions**: **background** rows carrying `origin: 'subagent'` (and a `parentId`) stay muted by default. The subagent session you have open is exempt — its alerts follow the normal current-conversation rules (tab marker only while the page is visible, delivered on background), its outstanding waits are picked up when you switch into it, and switching away mutes them again. A fork has a `parentId` but no `origin`, is your own conversation, and keeps alerting throughout.
 
 The reminder core stays dependency-free and self-contained: notification copy resolves at alert time from the chosen language (follow-interface / Simplified Chinese / English). The Settings page is an **optional** React surface — it only registers into Settings when the web profile provides the `slots` / `locale` services and `react`; without them the plugin degrades gracefully to alerts-only (no Settings page).
+
+</details>
 
 ### Quick decisions, and how they reach the agent
 

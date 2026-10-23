@@ -335,8 +335,6 @@ npm pack --dry-run               # 预览发布包
 
 ## 致谢与贡献须知
 
-贡献者（头像点进各自的 GitHub 主页，条目里的链接是他们参与的 PR / issue）：
-
 - <a href="https://github.com/AgMahone"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/AgMahone.png" width="24" height="24" alt="@AgMahone"></a> [#7](https://github.com/chromoany/dsh-notify-me/pull/7)：0.1.6+ / 0.2.0 宿主代际支持，以及通知双响、cordis 查找路径的报障与复测；
 - <a href="https://github.com/d0ublecl1ck"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/d0ublecl1ck.png" width="24" height="24" alt="@d0ublecl1ck"></a> [#8](https://github.com/chromoany/dsh-notify-me/pull/8)：子代理会话静音（`ignoreSubagent`）与配套测试、文档；1.4.0 里「只静音后台子代理、当前打开的照常提醒」的口径同样出自他在 #8 讨论里的建议，落地由维护者完成；
 - <a href="https://github.com/EliteOtaku"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/EliteOtaku.png" width="24" height="24" alt="@EliteOtaku"></a> [#9](https://github.com/chromoany/dsh-notify-me/issues/9)：桌面端抬窗链路（1.5.2）的逐层排查与真实壳三轮复测——确认点通知抬窗 + 切会话稳定生效，并定位出「无用户手势的脚本化注入被 Chromium 静默丢弃」这一复现差异，纠正了最初「沙箱拦死」的判断；

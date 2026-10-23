@@ -340,8 +340,6 @@ npm pack --dry-run               # preview the published tarball
 
 ## Credits & how contributions land
 
-Contributors (click an avatar for the GitHub profile; the links in each line point at the PR / issue they worked on):
-
 - <a href="https://github.com/AgMahone"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/AgMahone.png" width="24" height="24" alt="@AgMahone"></a> [#7](https://github.com/chromoany/dsh-notify-me/pull/7): the 0.1.6+ / 0.2.0 host-generation support, plus the double-chime and cordis-lookup reports and retesting;
 - <a href="https://github.com/d0ublecl1ck"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/d0ublecl1ck.png" width="24" height="24" alt="@d0ublecl1ck"></a> [#8](https://github.com/chromoany/dsh-notify-me/pull/8): muting subagent sessions (`ignoreSubagent`) with its tests and docs; the 1.4.0 refinement — mute only background subagents, alert as usual for the one you have open — is his suggestion from the #8 discussion, landed by the maintainer;
 - <a href="https://github.com/EliteOtaku"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/EliteOtaku.png" width="24" height="24" alt="@EliteOtaku"></a> [#9](https://github.com/chromoany/dsh-notify-me/issues/9): the layer-by-layer investigation and three rounds of real-shell retesting of the desktop raise path (1.5.2) — confirming that a toast click raises the window and switches conversations reliably, and pinning down the reproduction difference ("gesture-less scripted injection is silently dropped by Chromium"), which corrected the initial "the sandbox blocks it" reading;

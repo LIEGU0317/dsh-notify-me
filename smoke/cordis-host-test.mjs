@@ -540,7 +540,12 @@ async function main() {
             done({ status: this.statusCode, headers: this.headers, body });
           },
         };
-        const req = { method: spec.method, headers: spec.headers || {}, resume() {} };
+        const req = {
+          method: spec.method,
+          headers: Object.assign({ host: '127.0.0.1:3080' }, spec.headers || {}),
+          socket: { remoteAddress: spec.remoteAddress || '127.0.0.1' },
+          resume() {},
+        };
         try {
           const out = route.handler(req, res);
           if (out && typeof out.catch === 'function') out.catch((e) => done({ error: String(e) }));
@@ -562,6 +567,42 @@ async function main() {
     const wrongMethod = await callRoute({ method: 'DELETE' });
     assert(wrongMethod.status === 405, 'a non-POST/GET verb answers 405 (got ' + wrongMethod.status + ')');
 
+    // The gate: the route answers plain HTTP on the host port, and a
+    // DNS-rebinding page reaches that port while looking same-origin to the
+    // browser, so it can send any header. Only the peer address, the Host
+    // header and a agreeing Origin distinguish it.
+    const required = { 'x-dsh-notify-me-focus': 'focus' };
+    const foreignHost = await callRoute({ method: 'POST', headers: Object.assign({ host: 'evil.example' }, required) });
+    assert(foreignHost.status === 403 && foreignHost.body && foreignHost.body.reason === 'bad-host',
+      'a foreign Host is refused before the header even matters (got ' + foreignHost.status + ' ' + JSON.stringify(foreignHost.body) + ')');
+    const foreignPeer = await callRoute({ method: 'POST', remoteAddress: '10.0.0.5', headers: required });
+    assert(foreignPeer.status === 403 && foreignPeer.body && foreignPeer.body.reason === 'bad-remote',
+      'a non-loopback peer is refused (got ' + foreignPeer.status + ' ' + JSON.stringify(foreignPeer.body) + ')');
+    const foreignOrigin = await callRoute({
+      method: 'POST',
+      headers: Object.assign({ origin: 'http://evil.example' }, required),
+    });
+    assert(foreignOrigin.status === 403 && foreignOrigin.body && foreignOrigin.body.reason === 'cross-origin',
+      'a cross-site Origin is refused (got ' + foreignOrigin.status + ' ' + JSON.stringify(foreignOrigin.body) + ')');
+    const sameOrigin = await callRoute({
+      method: 'POST',
+      headers: Object.assign({ origin: 'http://127.0.0.1:3080' }, required),
+    });
+    assert(sameOrigin.status === 501,
+      'a same-origin page passes the gate and then gets the plain 501 (got ' + sameOrigin.status + ')');
+    const wrongPort = await callRoute({
+      method: 'POST',
+      headers: Object.assign({ origin: 'http://127.0.0.1:9999' }, required),
+    });
+    assert(wrongPort.status === 403 && wrongPort.body && wrongPort.body.reason === 'cross-origin',
+      'an Origin on another port counts as cross-origin (got ' + wrongPort.status + ' ' + JSON.stringify(wrongPort.body) + ')');
+    const preflight = await callRoute({
+      method: 'OPTIONS',
+      headers: { host: 'evil.example', origin: 'http://evil.example' },
+    });
+    assert(preflight.status === 405,
+      'a preflight is answered 405 and never with CORS headers (got ' + preflight.status + ')');
+
     // Point the route at a stand-in script: this is the test hook that turns the
     // desktop path on inside a plain Node process.
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-notify-me-focus-'));
@@ -575,7 +616,6 @@ async function main() {
       if (process.platform === 'win32') {
         fs.writeFileSync(focusScript, 'Write-Output "DETAIL=stub-ok"\nWrite-Output "FOCUSED=1"\n', 'utf8');
         fs.writeFileSync(missScript, 'Write-Output "FOCUSED=0"\n', 'utf8');
-        const required = { 'x-dsh-notify-me-focus': 'focus' };
 
         const raised = await callRoute({ method: 'POST', headers: required });
         assert(raised.status === 200 && raised.body && raised.body.focused === true,

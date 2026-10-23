@@ -2,6 +2,23 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.14.1] — 2026-10-23
+
+### 修复
+
+- **抬窗路由的 CSRF 闸门换成本地性校验**：1.14.0 把 `x-dsh-notify-me-focus: focus` 头当成防线，理由写的是「跨源页面带这个头要先过预检」。这条对 DNS rebinding 不成立——rebinding 出来的页面和目标地址同源，能带任意自定义头、不会触发预检。现在改成三层：对端地址必须 loopback；`Host` 必须是 loopback 名（`127.0.0.1` / `localhost` / `[::1]`，可带端口）；带了 `Origin` 就必须与 `Host` 同源。任一条不满足回 `403`，`reason` 写 `bad-remote` / `bad-host` / `cross-origin`。依据是 [@xinming-chenniang 在 #10446 的复测](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19145735)。
+- **`Host` 这一层是真正的分界**：壳转发 `dsh-app://app` 时会把 `host` 一起删掉，由 fetch 按 loopback URL 重填，所以桌面页面永远带 loopback 的 `Host`；rebinding 的页面 Host 仍是攻击者域名。自定义头保留，但只当「这是页面发的」标记，不再承担安全职责。
+- **`OPTIONS` 一律 `405` 且从不回 CORS 头**：预检不会被应答，跨源页面拿不到放行。
+
+### 测试
+
+- cordis 冒烟的路由段补五组断言：外边 `Host` → `403 bad-host`；非 loopback 对端 → `403 bad-remote`；跨源 `Origin` → `403 cross-origin`；同源 `Origin` 通过闸门后走到 `501`；换端口的 `Origin` 也算跨源；预检 `OPTIONS` → `405`。假请求补齐 `socket.remoteAddress` 与默认 `Host`。
+- 另用真 socket 复现过 1.14.0 的行为：`POST` 带 `Host: evil.example` + 跨源 `Origin` 仍返回 `200 focused:true`（打进 OS 激活路径），硬化后同样请求回 `403 bad-host`。`npm test` 全绿。
+
+### 文档
+
+- 中英 README 与 `docs/listing.md` 的安全段改口径：不再说「自定义头挡跨源」，改成本地性三层闸门与各自的 `reason`。
+
 ## [1.14.0] — 2026-10-23
 
 ### 新增

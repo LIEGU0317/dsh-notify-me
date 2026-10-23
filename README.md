@@ -294,7 +294,9 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 
 实测（`powershell.exe` 5.1，同一轮跑完）：窗口在前台 ×3、最小化 + 记事本在前台 ×3、可见但被盖住 ×3，全部 `FOCUSED=1` 且前台窗口比对一致，最小化那几个的 `IsIconic` 都从 `true` 变回 `false`；记事本最大化完全遮挡、最小化 + 完全遮挡、`-ProcessId 0` 自动探测同样成功。脚本内部耗时最坏 434 ms，进程启动到退出最坏 782 ms，都在 8 秒上限内；`pwsh` 7.6 对照一轮行为一致，只是 `Add-Type` 编译慢约 100 ms（脚本刻意不用 7 的语法）。不存在的 pid、存在但没有可见窗口的 pid 都稳定 `FOCUSED=0` 并 `exit 0`。
 
-安全上只开一条 exact 路由：非 POST 回 `405`，非桌面宿主（Web 版、macOS / Linux、纯 Node）回 `501`，缺了 `x-dsh-notify-me-focus: focus` 头回 `403`——跨源页面要带这个头得先过 preflight，而路由不放行任何 CORS 头，所以浏览器里别的站点调不动它。`GET` 只回 `{ok, route, enabled, desktop, platform}`，装完可以先用浏览器打开确认路由在不在。400 毫秒内的重复调用合并成一次，脚本超过 8 秒没回话就 kill 掉按失败处理。
+安全上只开一条 exact 路由。词表之外的请求一律拒：非 GET / HEAD / POST 回 `405`（包括预检的 `OPTIONS`，且从不回任何 CORS 头），非桌面宿主（Web 版、macOS / Linux、纯 Node）回 `501`，缺 `x-dsh-notify-me-focus: focus` 头回 `403`。
+
+那个头只是「这是页面发来的」标记，不是防线——DNS rebinding 的恶意页对目标地址而言是同源的，能带任意自定义头、也不触发预检。真正的闸门是三层：对端地址必须是 loopback；`Host` 必须是 loopback 名（`127.0.0.1` / `localhost` / `[::1]`，可带端口），因为壳转发时 `host` 已被删掉、由 fetch 按 loopback URL 重填，而 rebinding 的页面 Host 仍是攻击者域名；带了 `Origin` 就必须和 `Host` 同源。任一条不符回 `403`，`reason` 分别是 `bad-remote` / `bad-host` / `cross-origin`。`GET` 只回 `{ok, route, enabled, desktop, platform}`，装完可以先用浏览器打开确认路由在不在。400 毫秒内的重复调用合并成一次，脚本超过 8 秒没回话就 kill 掉按失败处理。
 
 抬不起来的场合还剩几种，都会如实回 `202`、对话照常切：目标窗口属于更高完整性级别（提权 / UAC）、窗口在另一个虚拟桌面、前台被别的进程反复抢回去。托盘隐藏（`SW_HIDE` 而非最小化）的窗口也选不到，DSH 当前不会这样。
 

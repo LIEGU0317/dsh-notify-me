@@ -2,6 +2,36 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.14.0] — 2026-10-23
+
+### 新增
+
+- **桌面端点通知真的能抬窗了**：插件在宿主侧注册一条 exact 路由 `POST /__dsh-notify-me/focus-window`，页面点通知时 POST 过去，宿主 spawn 一次 `powershell.exe` 跑 `lib/focus-window.ps1`，按 pid 找到 Electron 主窗口后做原生激活，把 `FOCUSED=1|0` 回成 `200` / `202`。此前那条 `dsh://open` 深链在 0.2.1-rc.2 上隔离复测 3/3 无效，1.14.0 起整条删掉。
+- **`debug()` 多一个 `raiseLast`**：`focused` / `not-focused:<原因>` / `http-<状态码>` / `error` / `browser` / `no-fetch`，报障时能分清是「路由没到」「脚本没抬起来」还是「浏览器里本来就只有 `window.focus()`」。`raiseChannel` 现在桌面端是 `host-route`，浏览器端仍是 `window-focus`。
+- **路由自带三条自证**：`GET` 返回 `{ok, route, enabled, desktop, platform}`，装机后可以先用浏览器打开确认路由在不在；非桌面宿主（Web 版、macOS / Linux 桌面、纯 Node）一律 `501 unsupported-host`，不会去 spawn 一个注定失败的进程。
+
+### 移除
+
+- **`dsh://open` 隐藏 iframe 通道**：子框架导航绕过 `will-navigate` 那条路依旧在，但应用的单实例让位每次都先于聚焦发生（带参第二实例约 130 ms 后退出码 1，`IsIconic` 不变），留着只是白起一个进程。
+
+### 说明
+
+- **为什么走 PowerShell 而不是原生模块**：插件宿主是普通 Node 进程（壳以 `ELECTRON_RUN_AS_NODE=1` 拉起），拿不到 Electron API；带原生依赖还得跟宿主 ABI 对齐。`powershell.exe` 在 Windows 10/11 上必在，脚本用 `Add-Type` 现编译 P/Invoke，零安装。
+- **抬窗顺序是实的，不是拍脑袋**：已在前台就什么都不做；最小化了先 `SW_RESTORE`；然后合成 ALT 抖动给本线程前台权限再 `SetForegroundWindow`；都不行才走 `SW_MINIMIZE` + `SW_RESTORE` 兜底。单独调 `SetForegroundWindow` 被前台锁拒，退到 ALT 抖动那一步就过——这条来自 [discussions #10446 的实测](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913)，也解释了此前「时灵时不灵」的观感。
+- **等待上限 8 秒、400 毫秒内合并**：脚本自身最坏 0.4 秒，超时按 `FOCUSED=0` 收口并 kill 掉；连点两条通知只跑一次。
+- **只 Windows**：`process.platform === "win32"` 且宿主跑在 Electron 里（`process.versions.electron`）才启用，其余平台一律 `501`，页面的抬窗行为跟以前一样。
+
+### 测试
+
+- 冒烟新增 6 个场景：桌面页面断言 POST 到路由、带 `x-dsh-notify-me-focus` 头、点击后切会话、`raiseLast` 为 `focused`、不再插 iframe；浏览器断点零 `fetch`、`raiseLast` 为 `browser`；`hostEnv` 两个方向都能覆盖；`501` 与 `fetch` 抛错时都只记状态、不挡切会话。
+- cordis 冒烟新增路由段：真 `Context` + 假 `webServer`，断言只注册一条 exact 路由、`GET` 探测形状、非桌面 `501`、`DELETE` 405、缺 header 403，以及 `FOCUSED=1` / `FOCUSED=0` 两个桩脚本分别回 `200` / `202`。
+- 真实窗口实测（`powershell.exe` 5.1，同一轮）：窗口在前台 ×3、最小化 + 记事本在前台 ×3、可见被盖住 ×3 全部 `FOCUSED=1` 且前台比对一致；记事本最大化遮挡、最小化 + 最大化遮挡、`-ProcessId 0` 自动探测同样成功；脚本内部耗时最坏 434 ms。`pwsh` 7.6 对照一轮行为一致，仅 `Add-Type` 编译慢约 100 ms。不存在的 pid 与存在但无窗口的 pid 都稳定 `FOCUSED=0` 且退出码 0。
+
+### 文档
+
+- README 中英重写[桌面端怎么抬窗的](README.md#桌面端怎么抬窗的)：删掉 1.5.2 深链那套叙述，换成宿主路由 + 原生激活的链路、实测数据与失败时的回退行为；已知限制里「桌面端不一定上前台」换成「提权窗口 / 虚拟桌面 / 前台被连续抢占时仍可能抬不起来，此时返回 `202` 但对话照常切」。
+- 致谢加上 [@xinming-chenniang](https://github.com/xinming-chenniang)：[discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913) 里给的五种手法实测表与「宿主自定义路由 + 同源校验 + PowerShell 兜底链」的思路，是这一版落地的直接依据。
+
 ## [1.13.0] — 2026-10-23
 
 ### 新增

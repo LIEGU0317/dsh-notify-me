@@ -17,6 +17,7 @@
 // pre-0.1.2 legacy path with no uiSession at all. It skips (exit 0) when no DSH
 // installation is present to borrow cordis from.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
@@ -487,6 +488,113 @@ async function main() {
     await tick();
     assert(h.getTitle().indexOf('✅') === -1, 'opening the session releases the unread mark');
     console.log('completionUnread latch + release OK');
+  }
+
+  // ── host half: the desktop window-focus route (1.14.0) ──────────────
+  // The packaged desktop page cannot raise its own window (no focus IPC in the
+  // shell, and Chromium only activates a window the OS already treats as
+  // foreground), so the host half registers one route on the web server and the
+  // toast click posts to it. What the page depends on, and what this block
+  // pins: the exact route path, a read-only GET probe, and 403/501 for anything
+  // that is not this page's click — a web-profile host must never spawn a
+  // process at all.
+  console.log('\n— host half: desktop window-focus route —');
+  {
+    const host = await import(pathToFileURL(path.join(ROOT, 'lib', 'index.js')).href);
+    assert(typeof host.apply === 'function' && host.name === 'dsh-notify-me', 'the host half exports a cordis plugin');
+    assert(host.FOCUS_ROUTE === '/__dsh-notify-me/focus-window', 'FOCUS_ROUTE is the path the page posts to');
+
+    // Minimal web-server stand-in: register() hands back a disposer, exactly
+    // like dsh-host-webserver.
+    const routes = [];
+    const root = new Context();
+    root.plugin({
+      name: 'fake-web-server',
+      apply(ctx) {
+        ctx.provide('webServer', {
+          register(route) {
+            routes.push(route);
+            return () => { const i = routes.indexOf(route); if (i !== -1) routes.splice(i, 1); };
+          },
+        });
+      },
+    });
+    root.plugin({ name: 'dsh-notify-me', apply: host.apply });
+    await tick();
+    assert(routes.length === 1, 'the host half registers exactly one route (got ' + routes.length + ')');
+    const route = routes[0];
+    assert(route.kind === 'exact', 'the focus route is exact, got ' + route.kind);
+    assert(route.path === host.FOCUS_ROUTE, 'the focus route path is ' + host.FOCUS_ROUTE + ', got ' + route.path);
+
+    // Drive the handler with the two globals it touches: method and headers.
+    function callRoute(spec) {
+      return new Promise((resolve) => {
+        let settled = false;
+        const done = (value) => { if (!settled) { settled = true; resolve(value); } };
+        const res = {
+          statusCode: 0,
+          writeHead(status, headers) { this.statusCode = status; this.headers = headers; },
+          end(payload) {
+            let body = null;
+            try { body = payload ? JSON.parse(payload) : null; } catch (e) { body = 'unparsed: ' + payload; }
+            done({ status: this.statusCode, headers: this.headers, body });
+          },
+        };
+        const req = { method: spec.method, headers: spec.headers || {}, resume() {} };
+        try {
+          const out = route.handler(req, res);
+          if (out && typeof out.catch === 'function') out.catch((e) => done({ error: String(e) }));
+        } catch (e) { done({ error: String(e) }); }
+      });
+    }
+
+    const probe = await callRoute({ method: 'GET' });
+    assert(probe.status === 200 && probe.body && probe.body.ok === true,
+      'the GET probe answers 200 ok (got ' + probe.status + ' ' + JSON.stringify(probe.body) + ')');
+    assert(probe.body.route === host.FOCUS_ROUTE, 'the GET probe names its own route');
+    assert(probe.body.desktop === false && probe.body.enabled === false,
+      'a plain Node host reports desktop:false, enabled:false (got ' + JSON.stringify(probe.body) + ')');
+
+    // A web-profile host answers POST without ever touching the OS.
+    const bare = await callRoute({ method: 'POST' });
+    assert(bare.status === 501, 'a POST on a non-desktop host is refused with 501 (got ' + bare.status + ')');
+
+    const wrongMethod = await callRoute({ method: 'DELETE' });
+    assert(wrongMethod.status === 405, 'a non-POST/GET verb answers 405 (got ' + wrongMethod.status + ')');
+
+    // Point the route at a stand-in script: this is the test hook that turns the
+    // desktop path on inside a plain Node process.
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-notify-me-focus-'));
+    const focusScript = path.join(tempDir, 'temp-focus-win.ps1');
+    const missScript = path.join(tempDir, 'temp-focus-miss.ps1');
+    try {
+      process.env.DSH_NOTIFY_ME_FOCUS_SCRIPT = focusScript;
+      const forbidden = await callRoute({ method: 'POST', headers: {} });
+      assert(forbidden.status === 403, 'a POST without the page header is refused with 403 (got ' + forbidden.status + ')');
+
+      if (process.platform === 'win32') {
+        fs.writeFileSync(focusScript, 'Write-Output "DETAIL=stub-ok"\nWrite-Output "FOCUSED=1"\n', 'utf8');
+        fs.writeFileSync(missScript, 'Write-Output "FOCUSED=0"\n', 'utf8');
+        const required = { 'x-dsh-notify-me-focus': 'focus' };
+
+        const raised = await callRoute({ method: 'POST', headers: required });
+        assert(raised.status === 200 && raised.body && raised.body.focused === true,
+          'a script reporting FOCUSED=1 answers 200 focused:true (got ' + raised.status + ' ' + JSON.stringify(raised.body) + ')');
+        assert(raised.body.detail === 'stub-ok', 'the script DETAIL line is surfaced, got ' + raised.body.detail);
+
+        await sleep(450); // outside the coalescing window
+        process.env.DSH_NOTIFY_ME_FOCUS_SCRIPT = missScript;
+        const missed = await callRoute({ method: 'POST', headers: required });
+        assert(missed.status === 202 && missed.body && missed.body.focused === false,
+          'a script reporting FOCUSED=0 answers 202 focused:false (got ' + missed.status + ' ' + JSON.stringify(missed.body) + ')');
+        console.log('window-focus route OK: exact path, probe, 403/405/501 refusals, and both script verdicts');
+      } else {
+        console.log('window-focus route OK on this platform path (activation spawn is Windows-only)');
+      }
+    } finally {
+      delete process.env.DSH_NOTIFY_ME_FOCUS_SCRIPT;
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   }
 
   console.log('\ncordis-host-test passed');

@@ -123,7 +123,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **「回复完成」什么时候提醒**（默认「仅后台」）：三选一。「仅后台」＝原来的规则，不在看页面才提醒；「仅当前对话静默」＝屏幕上那条静默，别的对话完成照常提醒，多开对话时有用；「总是提醒」＝从不静默。老配置里的「窗口在前台时也提醒『回复完成』」开关自动迁移到这一项；
 - **通知自动消失**（默认「离开时保留」）：三选一。「离开时保留」＝只有你在看页面时才几秒后关闭，人不在时收到的那条留在通知中心等你回来；「总是关闭」＝旧行为；「从不关闭」＝普通通知一直留着，等你点掉。带「同意 / 拒绝」的审批通知仍按 12 秒走，同样不会在人不在时被撤掉；
 - **子代理会话不提醒**（默认开）：跳过后台子代理（subagent）会话——它们是主对话那一轮的步骤，完成由主对话自己的提醒覆盖；你当前打开的那个子代理会话照常提醒；
-- **点击通知回到对应对话**（默认开）：点通知切到提醒所属的对话；浏览器里同时把窗口带到前台；桌面端不稳定——有时窗口会上前，有时只切对话（见[桌面端怎么抬窗的](#桌面端怎么抬窗的)）；多个标签页同时开着时只调起一个（优先当前可见的那个）；关掉后点通知不做任何事。
+- **点击通知回到对应对话**（默认开）：点通知切到提醒所属的对话；浏览器里同时把窗口带到前台；桌面端交给宿主路由做原生激活（见[桌面端怎么抬窗的](#桌面端怎么抬窗的)），抬不起来时只切对话，原因记在 `debug().raiseLast` 里；多个标签页同时开着时只调起一个（优先当前可见的那个）；关掉后点通知不做任何事。
 
 ### 试一试
 
@@ -164,13 +164,13 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ### 运行环境与诊断
 
-在「高级设置」最后一块。默认自动识别当前是 Web 端还是桌面端（DSH Desktop，`dsh-app://`）；识别不准时可手动指定——桌面端点通知走 `dsh://` 深链调窗（效果不稳定，见[桌面端怎么抬窗的](#桌面端怎么抬窗的)）、通知上不带快捷裁决按钮；Web 端走 `window.focus()` 与 Service Worker 桥。手动覆盖与自动识别不一致时，设置页会明示检测结果。
+在「高级设置」最后一块。默认自动识别当前是 Web 端还是桌面端（DSH Desktop，`dsh-app://`）；识别不准时可手动指定——桌面端点通知走宿主路由做原生抬窗（见[桌面端怎么抬窗的](#桌面端怎么抬窗的)）、通知上不带快捷裁决按钮；Web 端走 `window.focus()` 与 Service Worker 桥。手动覆盖与自动识别不一致时，设置页会明示检测结果。
 
 <details>
 <summary>通知语言、桌面端抬窗与恢复默认</summary>
 
 - **通知语言**：跟随界面 / 简体中文 / English——决定通知文字与 `🔔 …` 标题标记使用的语言；
-- **桌面端怎么抬窗**：页面侧的 `window.focus()` 在 Electron 里抬不动原生窗口，1.5.2 起改走应用自己的 `dsh://open` 深链调窗——在 DSH Desktop 0.2.0-rc.2 上实测有效，0.2.1-rc.2 在 Windows 上不稳定（详见下一节）；
+- **桌面端怎么抬窗**：页面侧的 `window.focus()` 在 Electron 里抬不动原生窗口，1.14.0 起由页面 POST 到宿主路由 `/__dsh-notify-me/focus-window`、宿主跑一次 PowerShell 做原生激活——窗口最小化、被别的窗口盖住都实测能抬回来（详见下一节）；
 - **恢复默认设置**：把所有开关与音效设置还原成出厂值（不动外部推送目标和已选的自定义音频文件）。
 
 </details>
@@ -264,7 +264,7 @@ window.__dshNotifyMe.testExternal()               // 显式外发测试：向有
 
 ## 工作原理
 
-提醒核心监听会话状态与待处理交互；审批裁决由页面侧完成，桌面抬窗使用应用深链。
+提醒核心监听会话状态与待处理交互；审批裁决由页面侧完成，桌面抬窗走宿主路由加 Win32 原生激活。
 
 <details>
 <summary>展开事件来源、审批桥接与桌面抬窗实现</summary>
@@ -286,23 +286,23 @@ window.__dshNotifyMe.testExternal()               // 显式外发测试：向有
 
 ### 桌面端怎么抬窗的
 
-DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 `window.focus()` 只动浏览器窗口对象、碰不到原生窗口，壳的 `will-navigate` / `window-open` 又把页面里发 `dsh://` 的常规出口全堵上了——所以 1.5.1 及以前点通知只在后台切好对话，窗口不上前台。1.5.2 起点通知正文时页面发一条隐藏 iframe 导航到 `dsh://open`：子框架导航不经过壳的 `will-navigate` 拦截，URL 交给系统协议注册，应用的单实例锁收到第二次启动后走 `focusPrimaryWindow()`（restore + show + focus）——与登录完成页把客户端置前是同一条路。窗口隐藏在托盘、被别的窗口压住、最小化，都能被抬回来。浏览器端不受影响，仍走 `window.focus()` / worker `client.focus()`。
+DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 `window.focus()` 只动浏览器窗口对象、碰不到原生窗口，壳的 `will-navigate` 又把页面里发 `dsh:` 的常规出口堵上了。1.5.2 到 1.13.0 靠一条隐藏 iframe 导航到 `dsh://open` 绕过去，借应用的单实例让位间接聚焦——在 0.2.1-rc.2 上隔离复测 3/3 无效，1.14.0 起整条删掉。
 
-真实壳已实测（DSH Desktop 0.2.0-rc.2，issue #9 三轮复测）：点通知 = 抬窗 + 切会话一步到位，跨会话、窗口在后台时同样稳定。触发时机是这条链路的关键：深链必须在**带用户手势的处理器**里发——通知的 `onclick` 自带手势，所以产品路径通；而无手势的脚本化注入（如 CDP evaluate 手工塞 iframe）会被 Chromium 静默丢弃、外部协议根本不回流，复现时看起来就像「通道被拦死」。
+现在走插件自己的宿主路由。壳把 `dsh-app://app` 下除静态资源以外的所有路径原样转发给宿主 HTTP server（带 origin 校验、注入宿主 cookie），所以页面对 `/__dsh-notify-me/focus-window` 发 POST 是同源请求，没有 CORS 问题；宿主半（`lib/index.js`）本来就跑在 Electron 主进程的子进程里，`process.ppid` 就是主窗口所属的浏览器进程。点通知时：页面 POST → 宿主起一次 `powershell.exe` 跑 `lib/focus-window.ps1 -ProcessId <ppid>` → 脚本枚举该 pid 下可见、无 owner、非 toolwindow 的顶层窗口（优先类名 `Chrome_WidgetWin_1`，再按 `GetWindowRect` 面积取最大）→ 自适应激活 → 比对 `GetForegroundWindow()` 打印 `FOCUSED=1|0` → 宿主回 `200` / `202`。
 
-**0.2.1-rc.2 在 Windows 上不稳定**（2026-10-20）：点通知的回调照常执行（`navigator.userActivation.isActive === true`、`visibilityState` 为 `hidden`），但窗口是否上前台时灵时不灵——有时会，有时只切对话、窗口不动。
+激活顺序是实的，来自 [discussions #10446 那份五种手法的实测](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913)：已经在前台就什么都不做（最常见的情况，零闪烁）；最小化了先 `SW_RESTORE`；然后合成一次 ALT 按键（`keybd_event` 按下抬起）给本线程前台权限，再 `SetForegroundWindow`；这一串都不行才退到 `SW_MINIMIZE` + `SW_RESTORE` 兜底。单独调 `SetForegroundWindow` 会被前台锁直接拒，按调用算、跟 `ForegroundLockTimeout` 无关；这也重新解释了 1.5.2 那套深链「时灵时不灵」——能抬起来的那些次，多半是系统在通知被点击时自己激活了应用。
 
-插件这一侧为什么不能指望：把 `dsh://open` 深链单独拿出来复测（三种走法各 3 次：直接带参启动 exe、走系统协议激活、`WM_SYSCOMMAND` 真实最小化后再发），**全部失败**——带参第二实例每次都在约 130 ms 后以退出码 1 结束（不带参数则约 260 ms 退出码 0，属正常单实例让位），最小化窗口的 `IsIconic` 每次都保持 `true`。也就是说，能抬起来的那些次，多半是系统/Chromium 在通知被点击时自己激活了应用窗口，不是插件发的深链起了作用。
+实测（`powershell.exe` 5.1，同一轮跑完）：窗口在前台 ×3、最小化 + 记事本在前台 ×3、可见但被盖住 ×3，全部 `FOCUSED=1` 且前台窗口比对一致，最小化那几个的 `IsIconic` 都从 `true` 变回 `false`；记事本最大化完全遮挡、最小化 + 完全遮挡、`-ProcessId 0` 自动探测同样成功。脚本内部耗时最坏 434 ms，进程启动到退出最坏 782 ms，都在 8 秒上限内；`pwsh` 7.6 对照一轮行为一致，只是 `Add-Type` 编译慢约 100 ms（脚本刻意不用 7 的语法）。不存在的 pid、存在但没有可见窗口的 pid 都稳定 `FOCUSED=0` 并 `exit 0`。
 
-页面侧也没有替代通道：壳的 preload 只暴露 `dshDesktop`、目录选择、本地化这些，`DESKTOP_IPC` 里没有 focus/raise 类通道；主窗口的 `will-navigate` 对 `dsh:` 一律 `preventDefault()`。复现步骤与代码位置已提交到 [deepseek-harness discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446)。
+安全上只开一条 exact 路由：非 POST 回 `405`，非桌面宿主（Web 版、macOS / Linux、纯 Node）回 `501`，缺了 `x-dsh-notify-me-focus: focus` 头回 `403`——跨源页面要带这个头得先过 preflight，而路由不放行任何 CORS 头，所以浏览器里别的站点调不动它。`GET` 只回 `{ok, route, enabled, desktop, platform}`，装完可以先用浏览器打开确认路由在不在。400 毫秒内的重复调用合并成一次，脚本超过 8 秒没回话就 kill 掉按失败处理。
 
-</details>
+抬不起来的场合还剩几种，都会如实回 `202`、对话照常切：目标窗口属于更高完整性级别（提权 / UAC）、窗口在另一个虚拟桌面、前台被别的进程反复抢回去。托盘隐藏（`SW_HIDE` 而非最小化）的窗口也选不到，DSH 当前不会这样。
 
 ## 已知限制
 
 - 页面必须开着才会提醒（后台标签/最小化可以；关标签页即失效——浏览器层方案固有限制）。
 - 通知经由浏览器弹出，需允许浏览器通知权限，且勿扰模式不能屏蔽它。
-- 桌面端（DSH Desktop 0.2.1-rc.2 / Windows）点通知后窗口不一定上前台：有时会，有时只切对话。插件发的 `dsh://open` 深链单独复测 3/3 无效（详见[桌面端怎么抬窗的](#桌面端怎么抬窗的)），能抬的时候多半是系统/Chromium 在通知激活时自己把窗口带起来了（[discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446)）。
+- 桌面端（DSH Desktop，Windows）点通知后窗口仍可能抬不起来：目标窗口属于更高完整性级别（提权 / UAC）、窗口在另一个虚拟桌面、前台被别的进程反复抢回去、或窗口被 `SW_HIDE` 隐藏到托盘时，宿主脚本回 `FOCUSED=0`、路由回 `202`，对话照常切（详见[桌面端怎么抬窗的](#桌面端怎么抬窗的)）。
 - 系统通知横幅只画在主屏：Windows 没有设置项、Chromium 没有 API 能把它指到别的显示器（多屏时副屏收不到系统通知）。要跨屏提醒只能靠外部推送转到手机（1.12.0 起页面里不再画审批卡片）。
 - 每次页面加载后第一次出声/弹通知前，需在页面上点击过一次（浏览器自动播放与权限策略）。
 - 未授权通知权限时只有提示音与标题标记。
@@ -323,6 +323,7 @@ node --check lib\client.js
 node --check lib\index.js
 node smoke\smoke-test.cjs        # 离线状态机冒烟测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）+ 闲置判定与通知自收
 node smoke\cordis-host-test.mjs  # 真 cordis 端到端（找不到本机 DSH 时自动跳过）
+powershell -NoProfile -File lib\focus-window.ps1 -ProcessId 0   # 手动验证抬窗脚本，末行应是 FOCUSED=1
 npm pack --dry-run               # 预览发布包
 ```
 
@@ -341,6 +342,7 @@ npm pack --dry-run               # 预览发布包
 - [@yuexian7](https://github.com/yuexian7) — [#17](https://github.com/chromoany/dsh-notify-me/issues/17)：安卓端收消息的诉求——Discord 在国内不便、Bark 没有安卓端，只能自己搭后台中转；1.13.0 的飞书 / Server酱 / WxPusher 三种目标、自动重试与失败记录都是据此做的。
 - [@shrekcg](https://github.com/shrekcg) — [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：把「人在前台但离开了」并入离开判定（`idleMinutes`，默认 3 分钟）、「回复完成」按哪个对话完成决定是否提醒（`donePolicy` 三选一）、通知自动消失的三档策略（`autoDismiss`），并带上对应冒烟用例与旧配置迁移；1.12.0 落地时维护者补了闲置到期补发被压下的审批、删掉残留的页内审批卡片、补齐文档与版本。
 
+- [@xinming-chenniang](https://github.com/xinming-chenniang) — [deepseek-harness discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913)：五种 Win32 抬窗手法的实测对照（单独 `SetForegroundWindow` 被前台锁拒、合成 ALT 键后通过、最小化→恢复两种场景都有效），以及「宿主注册同源路由 + PowerShell 兜底链」这条绕法的可运行验证；1.14.0 的宿主路由与 `lib/focus-window.ps1` 的直接依据。
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。
 
 ## License

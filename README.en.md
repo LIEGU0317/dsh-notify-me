@@ -26,11 +26,11 @@ A notification plugin for DSH Web / Desktop, so you can keep full access off wit
 - **When input is needed:** approval, plan review, and questions trigger notifications, sound, and a title marker.
 - **When a background reply finishes:** return to the result; click the notification to open its conversation. Pick "background only", "quiet for the open one", or "always".
 - **When you walk off but the window stays in front:** over 3 minutes without input counts as away, and the alert still fires; a toast you have not seen is not closed on a timer before you return.
-- **When you leave your computer:** optionally forward alerts to Discord, Bark, Gotify, or your own webhook.
+- **When you leave your computer:** optionally forward alerts to Discord, Bark, Gotify, Feishu group bots, ServerChan, WxPusher, or your own webhook.
 
 > Keep the page or desktop app running; backgrounding / minimizing is fine. System notifications require permission. Approval buttons need a Service Worker: Web (`http://127.0.0.1` or `https`) has one, the Desktop `dsh-app://` pages cannot register one, so their notifications carry no buttons — click the notification to decide in the conversation.
 
-> 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert**, **external notifications**, **Discord / Bark / Gotify push** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
+> 🔎 Looking for it? Search `dsh-notify-me`, **message alerts**, **notification**, **desktop notification**, **reminder**, **approval alert**, **external notifications**, **Android push**, **Discord / Bark / Gotify / Feishu / ServerChan / WxPusher push** or **可操作提醒 / 消息提醒 / 桌面通知 / 需要你操作** (npm keywords include both English and Chinese terms).
 
 ## UI Preview
 
@@ -152,12 +152,17 @@ Choose a built-in cue, custom audio file, or system notification sound independe
 
 ### External push
 
-Off by default. Supports Discord Webhook / Bark / Gotify / custom webhooks. Alert text is sent to the addresses you enter; use trusted endpoints.
+Off by default. Supports Discord Webhook / Bark / Gotify / Feishu group bots / ServerChan (Turbo and ServerChan³) / WxPusher / custom webhooks. Alert text is sent to the addresses you enter; use trusted endpoints.
 
 <details>
-<summary>Target URLs, forwarding switches, and test messages</summary>
+<summary>Target URLs, forwarding switches, test messages, and the failure log</summary>
 
-- **External notifications** (default off) — forward each alert to your own push endpoints as well, so it reaches you away from the machine: **Discord Webhook** / **Bark** / **Gotify** / **custom webhook**, any number of targets, each with a type and URL (Discord takes the webhook URL; Bark `https://api.day.app/<device key>`; Gotify `https://<server>/message?token=<app token>`; a custom endpoint receives one POST of JSON: `{source, event, title, body, sessionId, time}`). "Forward 'needs you'" and "Forward 'reply finished'" switch independently; **Send test notification** sends one test message to every target (not limited by those two switches, and never pretending to be a real alert). Forwarding follows exactly the same trigger rules as local alerts ("stay quiet for the conversation on screen" and friends apply to it too); the alert text is sent as-is to the addresses you fill in, so **only use endpoints you trust**;
+- **External notifications** (default off) — forward each alert to your own push endpoints as well, so it reaches you away from the machine: **Discord Webhook** / **Bark** / **Gotify** / **Feishu group bot** / **ServerChan** / **WxPusher** / **custom webhook**, any number of targets, each of which can be enabled or disabled on its own (Discord takes the webhook URL; Bark `https://api.day.app/<device key>`; Gotify `https://<server>/message?token=<app token>`; Feishu the group-bot webhook plus an optional verification secret; ServerChan the full `…/send/<SendKey>.send` URL; WxPusher the appToken and the receiver UID; a custom endpoint receives one POST of JSON: `{source, event, title, body, text, sessionId, time}`). "Forward 'needs you'" and "Forward 'reply finished'" switch independently; **Send test notification** sends one test message to every target (not limited by those two switches, and never pretending to be a real alert). Forwarding follows exactly the same trigger rules as local alerts ("stay quiet for the conversation on screen" and friends apply to it too); the alert text is sent as-is to the addresses you fill in, so **only use endpoints you trust**;
+- **Reliable delivery** — failures that look transient (network error, 5xx, 429) are retried after 2 s and 6 s; anything else stops at once. A delivery that still fails is recorded in the failure log (10 entries at most — title and body snippet plus host only, never the full endpoint), which the settings page shows and can clear;
+- **Per-target state** — the right end of each target row shows how its last delivery went (last delivery ok / sent-unverified / failed with the reason) next to a switch of its own, so an endpoint that is temporarily down can be turned off alone instead of muting a whole alert kind;
+- **Signing** — a custom target with a secret sends `X-DSH-Notify-Signature` (HMAC-SHA256 over the body, `sha256=<hex>`); a Feishu target with a secret carries `timestamp` / `sign` in the body per Feishu's own algorithm;
+- **Message template** (optional) — Feishu / ServerChan / WxPusher / custom targets accept a template with `{{title}}` `{{body}}` `{{event}}` `{{time}}` `{{session}}`; empty means "title, newline, body";
+- **DingTalk is not supported** — its robot endpoint answers no CORS header at all and only accepts `application/json`, so a page can neither read the reply nor send a conforming request (under no-cors the content type is restricted to the safelisted ones). To reach DingTalk, relay it through a machine you control and point a custom webhook at that.
 
 </details>
 
@@ -183,7 +188,7 @@ The last block inside Advanced. The page protocol is detected automatically to t
 - **System notification** — a toast through the browser into the Windows action center / macOS Notification Center (clicking it opens the conversation it came from; supported Web environments offer approval buttons, Desktop does not)
 - **Sound** — WebAudio beeps by default (distinct patterns for "needs you" vs "done"); each kind can instead play a picked audio file, or hand the sound over to the operating system's own notification sound
 - **Tab title marker** — while something is waiting on you, the tab title is prefixed with `🔔 Action needed · …` / `🔔 需要你 · …`; while a background session is **finished but unread**, with `✅ Reply finished · …` / `✅ 回复完成 · …`, gone once you open that session (or it starts running again). Both kinds can be up together, "needs you" first; a host title change is rebased under the markers
-- **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / custom webhook — so the push channel on your phone picks it up while you step away from the machine
+- **External notifications** (optional, default off) — the same alert is also forwarded to the push targets you configure: Discord Webhook / Bark / Gotify / Feishu group bot / ServerChan / WxPusher / custom webhook — so the push channel on your phone picks it up while you step away from the machine
 
 This is a **browser-layer** plugin: the DSH page must stay open (minimized or backgrounded is fine — that's exactly the "away" state it watches for).
 
@@ -241,8 +246,14 @@ window.__dshNotifyMe.setConfig({
   externalEnabled: false,     // external-notification forwarding master switch (default off: no endpoint, nothing is sent)
   externalAttention: true,    // forward "needs you" (exactly the same trigger rules as local alerts)
   externalDone: true,         // forward "reply finished"
-  externalTargets: []         // push targets: [{id, type:'discord'|'bark'|'gotify'|'custom', url}]
+  externalRetryDelays: [2000, 6000], // backoff for retryable failures (ms, with jitter; [] = send once)
+  externalTargets: []         // push targets, see the shape below
 })
+// Target shape: {id, type, url, secret?, token?, uid?, template?, enabled?}
+// type: 'discord' | 'bark' | 'gotify' | 'feishu' | 'serverchan' | 'wxpusher' | 'custom'
+// token/uid only for wxpusher (its URL is fixed to the official endpoint); secret signs Feishu bodies
+// and custom HMAC headers; template is optional ({{title}} {{body}} {{event}} {{time}} {{session}});
+// enabled:false disables that one target
 window.__dshNotifyMe.resetConfig()                // restore defaults (also drops any picked audio files)
 window.__dshNotifyMe.decide("approval:3", "allowed-once")  // programmatic decision: "allowed-once" | "rejected"
 window.__dshNotifyMe.testExternal()               // explicit outbound test to valid targets; resolves {sent, unverified, failed, statuses}
@@ -306,7 +317,7 @@ There is no page-side fallback either: the shell preload only exposes `dshDeskto
 - On `>= 0.1.6` (including `0.2.0-rc.2`, `0.2.1-rc.2`) the "reply finished" toast body carries only the session label, no assistant snippet: host snapshots no longer expose `nodes`. The alert itself still fires.
 - The title marker is written into `document.title` alongside the host: when the host recomputes the title it can overwrite the marker until the next alert event rewrites it.
 - "Stay quiet for the conversation on screen" is judged by whether the window has focus: a window covered by another app, a switched-away app, or a minimized one all count as background, so waits in the current conversation alert there too; once the window is back in front, or you touch the keyboard / mouse again (no longer idle), it goes quiet again.
-- External notification forwarding is subject to browser CORS rules: an endpoint that does not allow cross-origin requests falls back to a "sent but unverifiable" delivery (no-cors) and is reported honestly as such; Discord webhooks do allow cross-origin, so delivery to them is confirmed. HTTP errors are recorded as failures and never blindly retried. Forwarding runs only after the local alert has decided to fire, so anything the rules silence is never sent out.
+- External notification forwarding is subject to browser CORS rules: an endpoint that does not allow cross-origin requests falls back to a "sent but unverifiable" delivery (no-cors) and is reported honestly as such; Discord, Feishu, ServerChan, and WxPusher all allow cross-origin, so delivery to them is confirmed. DingTalk allows no CORS header at all and only accepts `application/json`, so a page cannot post to it — hence no DingTalk target type (relay it through your own box and use a custom webhook). A failure that looks transient (network error, 5xx, 429) is retried on the backoff; a delivery that still fails lands in the failure log, and anything else stops at once. Forwarding runs only after the local alert has decided to fire, so anything the rules silence is never sent out.
 
 - **The settings sidebar glyph relies on a DOM patch**: the shell hard-codes icons per section id and `settings.section` exposes no icon field, so the plugin can only swap the `<svg>` in its own row after the panel renders. It depends on the current panel structure (`data-shortcut-modal="settings"` plus a label `<span>` inside each nav button); if DSH changes that markup the patch silently stops working and the default gear shows instead — nothing else is affected.
 
@@ -332,6 +343,7 @@ Contributors (by handle; the link points at the PR / issue they worked on):
 - [@Wh1stle05](https://github.com/Wh1stle05) — [#10](https://github.com/chromoany/dsh-notify-me/pull/10): the per-kind alert sound source (built-in synth / picked audio file / system notification sound, chosen independently for "needs you" and "reply done"), with its settings UI, fallback chain, tests and docs; the two refinements — a "system" preview sending a real test notification instead of doing nothing, and the fake React holding hook state by index across renders — come from the same PR.
 - [@yanzhaohui1999](https://github.com/yanzhaohui1999) — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14): the 482-session idle-page CPU report (pinning `currentSessionId()` rescanning the whole table per row, 5.9%~6.5% of CPU) and the fix (derive the on-screen session once per list change), with a red-then-green regression assertion — a 4-row and a 40-row list change must cost the same (upstream reported 7 vs 43, 5 vs 5 after).
 - [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi) — [#12](https://github.com/chromoany/dsh-notify-me/issues/12): the external-notification forwarding suggestion (Discord Webhook / Bark / Gotify / custom webhook) and its use case (1.7.0).
+- [@yuexian7](https://github.com/yuexian7) — [#17](https://github.com/chromoany/dsh-notify-me/issues/17): the ask for alerts on an Android phone — Discord is awkward in mainland China and Bark has no Android app, so a self-hosted relay was the only option; 1.13.0's Feishu / ServerChan / WxPusher targets, retries, and failure log came out of it.
 - [@shrekcg](https://github.com/shrekcg) — [#16](https://github.com/chromoany/dsh-notify-me/pull/16): counting "in front but walked away" as away (`idleMinutes`, 3 minutes by default), deciding "reply finished" alerts by which conversation finished (`donePolicy`, three choices), the three-way toast self-dismiss policy (`autoDismiss`), with matching smoke cases and old-config migration; when it landed in 1.12.0 the maintainer added the idle-expiry replay for suppressed approvals, removed the leftover in-page approval card, and brought docs and version up to date.
 
 Attribution policy: external PRs are landed as maintainer commits — the original commit is not reused and no Co-authored-by trailer is added, so GitHub's contributors graph lists the maintainer only and contributors are credited above.

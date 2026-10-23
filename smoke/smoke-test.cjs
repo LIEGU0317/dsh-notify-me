@@ -1893,6 +1893,7 @@ function settingsBoot(seedConfig, seedSound, opts) {
         sandbox.Audio = makeAudioElementCapture().FakeAudio;
       }
       if (opts && opts.fetch) sandbox.fetch = opts.fetch;
+      if (opts && opts.seed) opts.seed(sandbox);
       if (seedConfig) sandbox.localStorage.setItem('dshNotifyMe.config', JSON.stringify(seedConfig));
       if (seedSound) sandbox.localStorage.setItem('dshNotifyMe.sound.done', JSON.stringify(seedSound));
     },
@@ -2045,8 +2046,9 @@ async function listChangeDerivation() {
 
 // ── 外部通知转发（webhook） ─────────────────────────────────────────
 // 转发链路的承诺只有几条：默认全关、不填端点就什么都不发；测试按钮发的是测试
-// 消息而不是假提醒；每类提醒的转发开关只拦真实提醒；CORS 被拒时降级 no-cors
-// 送出并如实标「不可确认」，真正的 HTTP 错误不盲重试。
+// 消息而不是假提醒；每类提醒的转发开关只拦真实提醒；每种服务用它自己的报文
+// 形状（含两种加签）；CORS 被拒时降级 no-cors 送出并如实标「不可确认」；
+// 可重试的错误按退避重试、彻底失败进死信记录，不可重试的错误立即停。
 async function externalWebhooks() {
   console.log('\n— external webhook forwarding —');
   const flush = () => new Promise((r) => setImmediate(r));
@@ -2182,11 +2184,51 @@ async function externalWebhooks() {
   assert(String(cors.calls[1].opts.headers['Content-Type']).indexOf('text/plain') === 0,
     'the fallback switches to text/plain (a simple request)', );
 
-  // 6) a real HTTP error is reported, never blindly retried.
-  const http = bootWeb(() => ({ ok: false, status: 500 }), { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] });
+  // 6) a 5xx answer is worth retrying: two more attempts, then the delivery is
+  //    recorded as a dead letter instead of vanishing. Delays are seeded to 0
+  //    so the test doesn't sit out the production backoff.
+  const http = bootWeb(() => ({ ok: false, status: 500 }), {
+    externalEnabled: true,
+    externalRetryDelays: [0, 0],
+    externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }],
+  });
   const r3 = await http.win.__dshNotifyMe.testExternal();
   assert(r3.failed === 1 && r3.statuses[0] === 'failed (HTTP 500)', 'HTTP errors are reported, got ' + JSON.stringify(r3));
-  assert(http.calls.length === 1, 'no retry after a real HTTP error');
+  assert(http.calls.length === 3, 'a 500 is retried twice, got ' + http.calls.length + ' attempts');
+  const d3 = http.win.__dshNotifyMe.debug().external;
+  assert(d3.retried === 1, 'the retry is counted, got ' + d3.retried);
+  assert(d3.deadLetters === 1, 'the final failure becomes a dead letter, got ' + d3.deadLetters);
+  const dead = d3.deadLettersLog[0];
+  assert(dead && dead.status === 'failed (HTTP 500)' && dead.attempts === 3, 'the dead letter records why and how often, got ' + JSON.stringify(dead));
+  assert(dead.host === 'hook.example', 'the dead letter keeps the host, not the secret path, got ' + dead.host);
+  assert(d3.health.t1 && d3.health.t1.status === 'failed (HTTP 500)', 'the target health remembers the verdict');
+  http.win.__dshNotifyMe.resetConfig();
+  assert(http.win.__dshNotifyMe.debug().external.deadLetters === 0, 'resetConfig empties the dead-letter log');
+
+  // 6b) a 4xx is the service saying no: retrying would only spam it.
+  const denied = bootWeb(() => ({ ok: false, status: 403 }), {
+    externalEnabled: true,
+    externalRetryDelays: [0, 0],
+    externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }],
+  });
+  const r3b = await denied.win.__dshNotifyMe.testExternal();
+  assert(r3b.failed === 1 && denied.calls.length === 1, 'a 4xx is final, got ' + denied.calls.length + ' attempts');
+
+  // 6c) a network blip is retried and the retry can win.
+  let flaky = 0;
+  const retryOk = bootWeb(() => {
+    flaky++;
+    // Both modes of the first attempt fail; the second attempt is readable.
+    if (flaky <= 2) throw new TypeError('Failed to fetch');
+    return { ok: true, status: 204 };
+  }, {
+    externalEnabled: true,
+    externalRetryDelays: [0, 0],
+    externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }],
+  });
+  const r3c = await retryOk.win.__dshNotifyMe.testExternal();
+  assert(r3c.sent === 1, 'the retried delivery succeeds, got ' + JSON.stringify(r3c));
+  assert(retryOk.calls.length === 3, 'a dropped connection is retried, got ' + retryOk.calls.length + ' calls');
 
   // 7) bark gets its third chance in the classic GET shape.
   const bark = bootWeb((rec) => {
@@ -2216,7 +2258,60 @@ async function externalWebhooks() {
   assert(r5.statuses.length === 1 && bad.calls.length === 1, 'only the valid target is contacted');
   assert(JSON.parse(bad.calls[0].body).source === 'dsh-notify-me', 'the coerced target gets the custom payload');
 
-  console.log('external webhooks OK: gated mirroring, payload shapes, no-cors fallback, honest statuses');
+  // 9) each service gets its own ABI — and both signing schemes can be
+  //    re-computed from the outgoing bytes, which is exactly what the
+  //    receiving side will do.
+  const crypto = require('crypto');
+  const SECRET = 'SIGN-SECRET';
+  const multi = bootWeb(() => ({ ok: true, status: 200, text: () => Promise.resolve('{"code":0}') }), {
+    externalEnabled: true,
+    externalTargets: [
+      { id: 'f', type: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/X', secret: SECRET },
+      { id: 's', type: 'serverchan', url: 'https://sctapi.ftqq.com/KEY.send' },
+      { id: 'w', type: 'wxpusher', token: 'AT_x', uid: 'UID_a,UID_b' },
+      { id: 'c', type: 'custom', url: 'https://hook.example/x', secret: SECRET, template: '{{event}}: {{title}}' },
+    ],
+  });
+  const r6 = await multi.win.__dshNotifyMe.testExternal();
+  assert(r6.sent === 4 && r6.failed === 0, 'every target type reports sent, got ' + JSON.stringify(r6));
+
+  const feishuCall = multi.calls.find((c) => c.url.indexOf('open.feishu.cn') !== -1);
+  const feishu = JSON.parse(feishuCall.body);
+  assert(feishu.msg_type === 'text' && feishu.content.text.indexOf('外部通知测试') === 0, 'feishu gets a text message, got ' + feishuCall.body);
+  const feishuSign = crypto.createHmac('sha256', feishu.timestamp + '\n' + SECRET).update('').digest('base64');
+  assert(feishu.sign === feishuSign, 'the feishu body signature verifies');
+  assert(feishu.timestamp.length === 10, 'feishu timestamps are seconds, got ' + feishu.timestamp);
+
+  const scCall = multi.calls.find((c) => c.url.indexOf('ftqq.com') !== -1);
+  assert(String(scCall.opts.headers['Content-Type']).indexOf('application/x-www-form-urlencoded') === 0, 'serverchan posts a form');
+  const scForm = decodeURIComponent(scCall.opts.body);
+  assert(scCall.opts.body.indexOf('title=') === 0 && scForm.indexOf('desp=') !== -1, 'serverchan carries title and desp, got ' + scForm);
+
+  const wpCall = multi.calls.find((c) => c.url.indexOf('wxpusher') !== -1);
+  const wp = JSON.parse(wpCall.body);
+  assert(wp.appToken === 'AT_x' && wp.contentType === 1, 'wxpusher carries the app token');
+  assert(Array.isArray(wp.uids) && wp.uids.length === 2 && wp.uids[1] === 'UID_b', 'wxpusher splits the receiver UIDs, got ' + JSON.stringify(wp.uids));
+
+  const cuCall = multi.calls.find((c) => c.url === 'https://hook.example/x');
+  const cuBody = JSON.parse(cuCall.body);
+  assert(cuBody.text === 'attention: 外部通知测试', 'the custom template renders {{event}}/{{title}}, got ' + cuBody.text);
+  const expectSig = 'sha256=' + crypto.createHmac('sha256', SECRET).update(cuCall.opts.body).digest('hex');
+  assert(cuCall.opts.headers['X-DSH-Notify-Signature'] === expectSig, 'the custom signature covers the exact body sent');
+
+  // 10) targets switch off one at a time, and a half-filled WxPusher target is
+  //     inert rather than posting a request the service will reject.
+  const offTarget = bootWeb(null, {
+    externalEnabled: true,
+    externalTargets: [
+      { id: 'a', type: 'custom', url: 'https://hook.example/a', enabled: false },
+      { id: 'b', type: 'custom', url: 'https://hook.example/b' },
+      { id: 'c', type: 'wxpusher', token: 'AT_x' },
+    ],
+  });
+  const d4 = offTarget.win.__dshNotifyMe.debug().external;
+  assert(d4.targets === 3 && d4.activeTargets === 1, 'disabled and half-configured targets stay inactive, got ' + JSON.stringify(d4));
+
+  console.log('external webhooks OK: gated mirroring, 7 payload shapes, signatures, retry/backoff, dead letters');
 }
 
 // ── 设置页：外部通知卡片 ────────────────────────────────────────────
@@ -2305,6 +2400,54 @@ async function settingsExternalRows() {
   none.press('测一测外部通知');
   assert(none.textNow().indexOf('先添加至少一个推送目标') !== -1, 'no-target gets a hint');
   none.cleanup();
+
+  // 7) the newer target types surface the fields their service needs, and only
+  //    those fields: a feishu bot has a signing secret + template, WxPusher
+  //    needs an appToken + receiver UID instead of a webhook URL.
+  const typed = settingsBoot({
+    externalEnabled: true,
+    externalTargets: [
+      { id: 'f', type: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/X' },
+      { id: 'w', type: 'wxpusher', token: 'AT_x', uid: 'UID_a' }
+    ]
+  }, null, { advanced: true });
+  assert(typed.find((n) => n.props && n.props['aria-label'] === '签名密钥'), 'feishu exposes the signing-secret field');
+  assert(typed.find((n) => n.props && n.props['aria-label'] === '消息模板'), 'chat targets expose the template field');
+  assert(typed.find((n) => n.props && n.props['aria-label'] === 'appToken'), 'wxpusher exposes the appToken');
+  assert(typed.find((n) => n.props && n.props['aria-label'] === '接收者 UID'), 'wxpusher exposes the receiver UID');
+  assert(typed.findAll((n) => n.props && n.props['aria-label'] === '推送地址').length === 1,
+    'only the webhook target has a URL field (WxPusher endpoint is fixed)');
+  const toggles = typed.findAll((n) => n.props && n.props['aria-label'] === '启用或停用这个目标');
+  assert(toggles.length === 2 && toggles[0].props['aria-checked'] === 'true', 'each target gets its own switch, got ' + toggles.length);
+  toggles[0].props.onClick();
+  typed.renderNow();
+  assert(typed.configNow().externalTargets[0].enabled === false, 'the per-target switch persists');
+  typed.cleanup();
+
+  // 8) a target's last verdict and the dead-letter log are rendered from
+  //    storage, and the log can be cleared from the page.
+  const health = settingsBoot(
+    { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }] },
+    null,
+    {
+      advanced: true,
+      seed(sandbox) {
+        sandbox.localStorage.setItem('dshNotifyMe.external.health', JSON.stringify({
+          t1: { status: 'failed (HTTP 500)', at: '2026-10-23T06:00:00.000Z', attempts: 3, reason: 'HTTP 500' }
+        }));
+        sandbox.localStorage.setItem('dshNotifyMe.external.dead', JSON.stringify([
+          { at: '2026-10-23T06:00:00.000Z', targetId: 't1', type: 'custom', host: 'hook.example', title: '需要你', body: 'y', status: 'failed (HTTP 500)', attempts: 3 }
+        ]));
+      }
+    }
+  );
+  assert(health.text.indexOf('上次失败 · HTTP 500') !== -1, 'the per-target status reads failed, got ' + health.text);
+  assert(health.text.indexOf('彻底失败 1 条') !== -1, 'the failure log counts the dead letter');
+  assert(health.text.indexOf('hook.example') !== -1, 'the failure log shows the host, not the secret path');
+  health.press('清空失败记录');
+  assert(health.textNow().indexOf('没有投递失败的记录') !== -1, 'clearing the log updates the row');
+  assert(health.configNow() !== null, 'clearing the failure log does not touch the config');
+  health.cleanup();
 
   console.log('external settings rows OK: card renders, targets edit/persist, test button reports, hints for the silent cases');
 }

@@ -2,6 +2,30 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.13.0] — 2026-10-23
+
+### 新增
+
+- **外部推送新增三种国内常用目标**（来自 [#17](https://github.com/chromoany/dsh-notify-me/issues/17) 的安卓端诉求）：`feishu`（飞书群机器人）、`serverchan`（Server酱 Turbo 与 Server酱³ 同一套 `…/send/<SendKey>.send` 地址 + `title`/`desp` 表单）、`wxpusher`（`appToken` + 接收者 UID，端点固定，没有可填错的 URL）。三种都走官方接口，浏览器页面能直连确认送达——飞书返回 `Access-Control-Allow-Origin: *`，Server酱与 WxPusher 回显页面 Origin。
+- **失败自动重试与失败记录**：明显临时的失败（网络中断、HTTP 5xx、429）按 `externalRetryDelays`（默认 2 秒 / 6 秒，带 ±25% 抖动）退避重试；其它错误立即停。重试仍失败的投递写进「失败记录」（最多 10 条，只留标题与正文摘要、事件类型与主机名，不留完整端点），设置页可查看与清空。
+- **每个目标可单独启停、并显示最近一次投递状态**：目标行右侧显示「上次成功 / 上次已送出（不可确认）/ 上次失败 + 原因 + 时间」，旁边一个独立开关（`enabled: false`）——某个端点临时不可用就单独关掉它，不必关掉整类事件。
+- **出站签名**：自定义目标填了签名密钥时，请求带 `X-DSH-Notify-Signature`（对请求体做 HMAC-SHA256，`sha256=<hex>`）与 `X-DSH-Notify-Timestamp`；飞书目标填了密钥时按官方算法在请求体里带 `timestamp`（秒）/ `sign`（`base64(HMAC(key = timestamp + "\n" + secret, data = ""))`）。
+- **消息模板**：飞书 / Server酱 / WxPusher / 自定义目标可填模板，占位符 `{{title}}` `{{body}}` `{{event}}` `{{time}}` `{{session}}`；留空是「标题 + 换行 + 正文」。
+- 服务端返回的失败原因如实写进状态：飞书/Server酱/WxPusher 的 `code` 判成功（WxPusher 为 `1000`），失败带上 `error` / `message` / `info` / `msg`。
+
+### 说明
+
+- **钉钉群机器人没有做成目标类型**：实测其接口不返回任何 CORS 头，且只接受 `application/json`——浏览器页面既读不到响应，也无法在 no-cors 下发出合规请求。文档与设置页提示：自建一个中转，用「自定义 Webhook」指向它。
+- **PushDeer / ntfy 同样没有做**：PushDeer 官方安卓客户端已停止维护、接口无 CORS 头；ntfy 自建在安卓上依赖常连保活、默认 `priority` 低于 4 不弹横幅。需要时仍可用自定义目标接自建 ntfy。
+
+### 测试
+
+- 冒烟新增：4 种目标各发一次并逐个校验报文形状（飞书 text + 签名、Server酱 form 编码、WxPusher token/uids、自定义模板与 HMAC 头）；网络错误/5xx 重试到耗尽进失败记录、4xx 不重试、第二次成功只记 `sent`；目标级 `enabled:false` 被裁剪；设置页的类型专属字段、目标启停开关、状态文案、失败记录展示与清空。
+
+### 文档
+
+- README 中英：外部推送整节重写（目标类型、可靠性、状态、签名、模板、钉钉为何不支持），控制台示例补 `externalRetryDelays` 与目标字段形状，已知限制口径同步；致谢加上 [@yuexian7](https://github.com/yuexian7) 与 #17。
+
 ## [1.12.0] — 2026-10-21
 
 ### 新增

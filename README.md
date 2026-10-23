@@ -26,11 +26,11 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 - **需要你操作时**：审批、方案确认、提问，用通知、提示音和标题标记提醒。
 - **后台回复完成时**：及时回来查看结果，点击通知可回到对应对话；提醒时机可选「仅后台 / 仅当前对话静默 / 总是提醒」。
 - **人走开但窗口没走**：窗口留在最前台、人却离开座位，超过 3 分钟没有输入也算离开，该提醒的照常提醒；收到的那条通知不会在你回来之前自己消失。
-- **离开电脑时**：可选转发到 Discord、Bark、Gotify 或自己的 Webhook。
+- **离开电脑时**：可选转发到 Discord、Bark、Gotify、飞书群机器人、Server酱、WxPusher 或自己的 Webhook。
 
 > 页面或桌面应用需保持运行，后台 / 最小化可以。系统通知需要通知权限。审批按钮靠 Service Worker 才能进通知：Web 端（`http://127.0.0.1` 或 `https`）有，桌面端 `dsh-app://` 页面注册不了，通知上没有按钮，点通知回到对话里裁决。
 
-> 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**、**外部通知**、**Discord / Bark / Gotify 推送**（npm 关键词已含以上中英文词）。
+> 🔎 想找这个插件？可以搜：`dsh-notify-me`、**消息提醒**、**可操作提醒**、**桌面通知**、**需要你操作**、**回复完成提醒**、**后台完成提醒**、**外部通知**、**安卓推送**、**Discord / Bark / Gotify / 飞书 / Server酱 / WxPusher 推送**（npm 关键词已含以上中英文词）。
 
 ## 效果预览
 
@@ -148,12 +148,17 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 ### 外部推送
 
-默认关闭。支持 Discord Webhook / Bark / Gotify / 自定义 Webhook；提醒正文会发往你填写的地址，只使用可信端点。
+默认关闭。支持 Discord Webhook / Bark / Gotify / 飞书群机器人 / Server酱（Turbo 与 Server酱³）/ WxPusher / 自定义 Webhook；提醒正文会发往你填写的地址，只使用可信端点。
 
 <details>
-<summary>目标地址、转发开关与发送测试</summary>
+<summary>目标地址、转发开关、发送测试与失败记录</summary>
 
-- **外部通知**（默认关）：把提醒同时转发到你自己的推送端点，人不在电脑前也能收到——支持 **Discord Webhook** / **Bark** / **Gotify** / **自定义 Webhook**，可加多个目标，每个选类型填地址（Discord 填 Webhook 地址；Bark 填 `https://api.day.app/<设备密钥>`；Gotify 填 `https://<服务器>/message?token=<应用令牌>`；自定义端点收一条 POST JSON：`{source, event, title, body, sessionId, time}`）；「转发「需要你」」「转发「回复完成」」各自独立开关；**发送测试通知**往所有目标发一条测试消息（不受这两类开关限制，也不会冒充真提醒）。转发跟本地提醒走同一套触发规则（「当前对话不弹通知」等开关同样管它）；提醒正文会原样发往你填的地址，**只填你自己信任的端点**；
+- **外部通知**（默认关）：把提醒同时转发到你自己的推送端点，人不在电脑前也能收到——支持 **Discord Webhook** / **Bark** / **Gotify** / **飞书群机器人** / **Server酱** / **WxPusher** / **自定义 Webhook**，可加多个目标，每个目标可单独启用/停用（Discord 填 Webhook 地址；Bark 填 `https://api.day.app/<设备密钥>`；Gotify 填 `https://<服务器>/message?token=<应用令牌>`；飞书填群机器人 Webhook，可选填签名校验密钥；Server酱 填 `…/send/<SendKey>.send` 完整地址；WxPusher 填 appToken 与接收者 UID；自定义端点收一条 POST JSON：`{source, event, title, body, text, sessionId, time}`）；「转发「需要你」」「转发「回复完成」」各自独立开关；**发送测试通知**往所有目标发一条测试消息（不受这两类开关限制，也不会冒充真提醒）。转发跟本地提醒走同一套触发规则（「当前对话不弹通知」等开关同样管它）；提醒正文会原样发往你填的地址，**只填你自己信任的端点**；
+- **可靠投递**：明显是临时故障的失败（网络中断、5xx、429）按 2 秒 / 6 秒自动重试两次，其它错误立即停；重试仍失败会把这一条记进「失败记录」（最多 10 条，只留标题与正文摘要和主机名，不留完整端点），设置页能一眼看到并清空；
+- **每个目标的状态**：目标行右侧显示它最近一次投递的结果（上次成功 / 上次已送出但不可确认 / 上次失败 + 原因），并各自带一个启停开关——某个端点临时不可用就单独关掉它，不用关掉整类事件；
+- **签名**：自定义目标填了签名密钥时，请求带 `X-DSH-Notify-Signature`（对请求体做 HMAC-SHA256，`sha256=<hex>`）；飞书填了签名密钥时按官方算法在请求体里带 `timestamp` / `sign`；
+- **消息模板**（可选）：飞书 / Server酱 / WxPusher / 自定义目标可填模板，占位符 `{{title}}` `{{body}}` `{{event}}` `{{time}}` `{{session}}`，留空默认是「标题 + 换行 + 正文」；
+- **钉钉不在支持列表里**：钉钉群机器人接口不返回任何 CORS 头，且只接受 `application/json`——浏览器页面既读不到响应，也无法发出符合要求的请求（no-cors 下 Content-Type 会被限制成 safelisted 类型）。要用钉钉，请在自己能控制的机器上搭一个中转，再把「自定义 Webhook」指向它。
 
 </details>
 
@@ -179,7 +184,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **系统通知**：经浏览器弹出的系统通知，进 Windows 通知中心或 macOS 通知中心（点击回到提醒所属的对话；支持快捷裁决的 Web 环境可点审批按钮直接裁决，桌面端没有按钮）
 - **提示音**：默认是 WebAudio 合成音（「需要你」与「完成」使用不同音型）；可在设置里为两类提醒分别换成自定义音频文件，或改成让操作系统播放它自己的通知音
 - **标签页标题标记**：有待处理事项时，标题前出现 `🔔 需要你 · …` / `🔔 Action needed · …`；后台会话**完成但还没看**时出现 `✅ 回复完成 · …` / `✅ Reply finished · …`，打开对应会话（或它再次开跑）即消失。两种标记可同时出现，「需要你」在前；宿主改写标题后标记基于新标题重建
-- **外部通知**（可选，默认关）：按设置里配的推送目标，把同一条提醒转发到 Discord Webhook / Bark / Gotify / 自定义 Webhook——临时离开电脑时，手机上的推送渠道照样收到
+- **外部通知**（可选，默认关）：按设置里配的推送目标，把同一条提醒转发到 Discord Webhook / Bark / Gotify / 飞书群机器人 / Server酱 / WxPusher / 自定义 Webhook——临时离开电脑时，手机上的推送渠道照样收到
 
 本插件是**浏览器层**实现：DSH 页面需保持打开（最小化/后台即可——那正是它监听的「离开」状态）。
 
@@ -237,8 +242,13 @@ window.__dshNotifyMe.setConfig({
   externalEnabled: false,     // 外部通知转发主开关（默认关：不填端点就什么都不发）
   externalAttention: true,    // 转发「需要你」（触发规则跟本地提醒完全一致）
   externalDone: true,         // 转发「回复完成」
-  externalTargets: []         // 推送目标：[{id, type:'discord'|'bark'|'gotify'|'custom', url}]
+  externalRetryDelays: [2000, 6000], // 可重试失败的退避间隔（毫秒，带抖动；[] = 只发一次）
+  externalTargets: []         // 推送目标，见下方字段说明
 })
+// 目标的形状：{id, type, url, secret?, token?, uid?, template?, enabled?}
+// type: 'discord' | 'bark' | 'gotify' | 'feishu' | 'serverchan' | 'wxpusher' | 'custom'
+// token/uid 只用于 wxpusher（url 固定为官方端点）；secret 用于飞书签名与自定义 HMAC 签名；
+// template 可选，占位符 {{title}} {{body}} {{event}} {{time}} {{session}}；enabled:false 单独停用该目标
 window.__dshNotifyMe.resetConfig()                // 恢复默认（同时清掉已选的自定义音效文件）
 window.__dshNotifyMe.decide("approval:3", "allowed-once")  // 程序化裁决："allowed-once" | "rejected"
 window.__dshNotifyMe.testExternal()               // 显式外发测试：向有效目标发送，返回 {sent, unverified, failed, statuses}
@@ -302,7 +312,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 - `≥ 0.1.6`（含 `0.2.0-rc.2`、`0.2.1-rc.2`）的「回复完成」提醒正文只有会话名，不再附带回复摘要——宿主快照已不再提供 `nodes`；提醒本身照常触发。
 - 标题标记由宿主与插件共同写 `document.title`：宿主重算标题时标记可能被覆盖，直到下一次提醒事件重新写成。
 - 「当前对话不弹通知」按「窗口是否在前台」判定：窗口被别的应用盖住、切到别的应用、最小化都算后台，此时当前对话的等待照常提醒；窗口回到前台、或重新有键鼠输入（不再闲置）之后，再恢复静默。
-- 外部通知转发受浏览器跨域（CORS）限制：端点不放行时自动降级为「送出但不可确认」（no-cors），如实标为「已送出不可确认」；Discord Webhook 官方放行跨域，可直接确认送达。HTTP 错误如实记失败、不重试。转发在本地提醒决定要发之后才触发，所以被「当前对话不弹通知」等规则静音的提醒也不会外发。
+- 外部通知转发受浏览器跨域（CORS）限制：端点不放行时自动降级为「送出但不可确认」（no-cors），如实标为「已送出不可确认」；Discord、飞书、Server酱、WxPusher 都放行跨域，可直接确认送达。钉钉不放行任何 CORS 头、又只收 `application/json`，页面发不出去，所以没有做成目标类型（自建中转 + 自定义目标才行）。明显临时的失败（网络中断、5xx、429）会按退避重试，重试仍失败进失败记录；其余错误立即停、不重试。转发在本地提醒决定要发之后才触发，所以被「当前对话不弹通知」等规则静音的提醒也不会外发。
 
 - **设置左侧导航行图标靠 DOM 补丁**：外壳按分区 id 硬编码图标且 `settings.section` 没有图标字段，插件只能在面板渲染后把那一行的 `<svg>` 换成铃铛。命中依赖宿主当前的面板结构（`data-shortcut-modal="settings"` + 导航按钮里的标签 `<span>`）；如果 DSH 改了这套结构，补丁会静默失效、显示回默认齿轮，其他功能不受影响。
 
@@ -328,6 +338,7 @@ npm pack --dry-run               # 预览发布包
 - [@Wh1stle05](https://github.com/Wh1stle05) — [#10](https://github.com/chromoany/dsh-notify-me/pull/10)：「音效来源」功能（内置合成音 / 自定义音频文件 / 系统通知音，「需要你」与「回复完成」各自独立选），含设置页交互、回落链与测试、文档；「系统通知音」试听改发测试通知、假 React 按索引跨渲染保持 hook 状态这两处修正同样出自该 PR。
 - [@yanzhaohui1999](https://github.com/yanzhaohui1999) — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14)：482 个会话下空闲页面烧 CPU 的性能报告（定位到 `currentSessionId()` 每行重扫全表，实测占 CPU 5.9%~6.5%）与修复（一次列表变化只推导一次「当前会话」），并带先红后绿的回归断言——4 行与 40 行的列表变化代价必须相等（上游报 7 vs 43，修后 5 vs 5）。
 - [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi) — [#12](https://github.com/chromoany/dsh-notify-me/issues/12)：外部通知转发（Discord Webhook / Bark / Gotify / 自定义 Webhook）的功能建议与使用场景（1.7.0）。
+- [@yuexian7](https://github.com/yuexian7) — [#17](https://github.com/chromoany/dsh-notify-me/issues/17)：安卓端收消息的诉求——Discord 在国内不便、Bark 没有安卓端，只能自己搭后台中转；1.13.0 的飞书 / Server酱 / WxPusher 三种目标、自动重试与失败记录都是据此做的。
 - [@shrekcg](https://github.com/shrekcg) — [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：把「人在前台但离开了」并入离开判定（`idleMinutes`，默认 3 分钟）、「回复完成」按哪个对话完成决定是否提醒（`donePolicy` 三选一）、通知自动消失的三档策略（`autoDismiss`），并带上对应冒烟用例与旧配置迁移；1.12.0 落地时维护者补了闲置到期补发被压下的审批、删掉残留的页内审批卡片、补齐文档与版本。
 
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。

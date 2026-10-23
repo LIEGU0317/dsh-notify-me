@@ -6,7 +6,7 @@ All notable changes to **dsh-notify-me** are documented here.
 
 ### 修复
 
-- **抬窗路由的 CSRF 闸门换成本地性校验**：1.14.0 把 `x-dsh-notify-me-focus: focus` 头当成防线，理由写的是「跨源页面带这个头要先过预检」。这条对 DNS rebinding 不成立——rebinding 出来的页面和目标地址同源，能带任意自定义头、不会触发预检。现在改成三层：对端地址必须 loopback；`Host` 必须是 loopback 名（`127.0.0.1` / `localhost` / `[::1]`，可带端口）；带了 `Origin` 就必须与 `Host` 同源。任一条不满足回 `403`，`reason` 写 `bad-remote` / `bad-host` / `cross-origin`。依据是 [@xinming-chenniang 在 #10446 的复测](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19145735)。
+- **抬窗路由的 CSRF 闸门换成本地性校验**：1.14.0 把 `x-dsh-notify-me-focus: focus` 头当成防线，理由写的是「跨源页面带这个头要先过预检」。这条对 DNS rebinding 不成立——rebinding 出来的页面和目标地址同源，能带任意自定义头、不会触发预检。现在改成三层：对端地址必须 loopback；`Host` 必须是 loopback 名（`127.0.0.1` / `localhost` / `[::1]`，可带端口）；带了 `Origin` 就必须与 `Host` 同源。任一条不满足回 `403`，`reason` 写 `bad-remote` / `bad-host` / `cross-origin`。
 - **`Host` 这一层是真正的分界**：壳转发 `dsh-app://app` 时会把 `host` 一起删掉，由 fetch 按 loopback URL 重填，所以桌面页面永远带 loopback 的 `Host`；rebinding 的页面 Host 仍是攻击者域名。自定义头保留，但只当「这是页面发的」标记，不再承担安全职责。
 - **`OPTIONS` 一律 `405` 且从不回 CORS 头**：预检不会被应答，跨源页面拿不到放行。
 
@@ -34,7 +34,7 @@ All notable changes to **dsh-notify-me** are documented here.
 ### 说明
 
 - **为什么走 PowerShell 而不是原生模块**：插件宿主是普通 Node 进程（壳以 `ELECTRON_RUN_AS_NODE=1` 拉起），拿不到 Electron API；带原生依赖还得跟宿主 ABI 对齐。`powershell.exe` 在 Windows 10/11 上必在，脚本用 `Add-Type` 现编译 P/Invoke，零安装。
-- **抬窗顺序是实的，不是拍脑袋**：已在前台就什么都不做；最小化了先 `SW_RESTORE`；然后合成 ALT 抖动给本线程前台权限再 `SetForegroundWindow`；都不行才走 `SW_MINIMIZE` + `SW_RESTORE` 兜底。单独调 `SetForegroundWindow` 被前台锁拒，退到 ALT 抖动那一步就过——这条来自 [discussions #10446 的实测](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913)，也解释了此前「时灵时不灵」的观感。
+- **抬窗顺序是实的，不是拍脑袋**：已在前台就什么都不做；最小化了先 `SW_RESTORE`；然后合成 ALT 抖动给本线程前台权限再 `SetForegroundWindow`；都不行才走 `SW_MINIMIZE` + `SW_RESTORE` 兜底。单独调 `SetForegroundWindow` 被前台锁拒，退到 ALT 抖动那一步就过，这也解释了此前「时灵时不灵」的观感。
 - **等待上限 8 秒、400 毫秒内合并**：脚本自身最坏 0.4 秒，超时按 `FOCUSED=0` 收口并 kill 掉；连点两条通知只跑一次。
 - **只 Windows**：`process.platform === "win32"` 且宿主跑在 Electron 里（`process.versions.electron`）才启用，其余平台一律 `501`，页面的抬窗行为跟以前一样。
 
@@ -47,7 +47,6 @@ All notable changes to **dsh-notify-me** are documented here.
 ### 文档
 
 - README 中英重写[桌面端怎么抬窗的](README.md#桌面端怎么抬窗的)：删掉 1.5.2 深链那套叙述，换成宿主路由 + 原生激活的链路、实测数据与失败时的回退行为；已知限制里「桌面端不一定上前台」换成「提权窗口 / 虚拟桌面 / 前台被连续抢占时仍可能抬不起来，此时返回 `202` 但对话照常切」。
-- 致谢加上 [@xinming-chenniang](https://github.com/xinming-chenniang)：[discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913) 里给的五种手法实测表与「宿主自定义路由 + 同源校验 + PowerShell 兜底链」的思路，是这一版落地的直接依据。
 
 ## [1.13.0] — 2026-10-23
 
@@ -210,7 +209,7 @@ All notable changes to **dsh-notify-me** are documented here.
 
 - **修正 1.9.4 的口径过重**：实测补充了「有时能上前台」的反馈后重测——1.9.4 说的「0.2.1-rc.2 上失效」不准确，实际是**不稳定**：有时窗口会上前，有时只切对话。
 - 复测方法：把 `dsh://open` 深链单独拿出来，三种走法（直接带参启动 exe、走系统协议激活、`WM_SYSCOMMAND` 真实最小化后再发）各 3 次，**全部失败**——带参第二实例每次约 130 ms 后退出码 1（不带参数约 260 ms 退出码 0，正常单实例让位），最小化窗口的 `IsIconic` 每次保持 `true`。⇒ 能抬起来的那些次大概率是系统/Chromium 在通知点击时自己激活了窗口，不是深链。
-- README（中英）与设置页提示改为「不稳定」，并写明隔离复测结论；上游 [discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446) 待补充这条「间歇」信息。
+- README（中英）与设置页提示改为「不稳定」，并写明隔离复测结论。
 
 ### 测试
 
@@ -220,7 +219,7 @@ All notable changes to **dsh-notify-me** are documented here.
 
 ### 说明
 
-- **改口径：桌面端「点通知抬窗」不再当成必然**。DSH Desktop 0.2.1-rc.2（Windows）实测这条链路失效——通知点击回调照常执行（`navigator.userActivation.isActive === true`），但窗口不上前台；带 `dsh://open` 参数的第二实例 133 ms 后以退出码 1 结束，不带参数则 258 ms 退出码 0；用 `WM_SYSCOMMAND` 真实最小化后发深链，`IsIconic` 仍为 `true`，`focusPrimaryWindow()` 的 `restore()` 没生效；壳的 preload 也没有 focus/raise 类 IPC。复现与代码位置已提交 [deepseek-harness discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446)。
+- **改口径：桌面端「点通知抬窗」不再当成必然**。DSH Desktop 0.2.1-rc.2（Windows）实测这条链路失效——通知点击回调照常执行（`navigator.userActivation.isActive === true`），但窗口不上前台；带 `dsh://open` 参数的第二实例 133 ms 后以退出码 1 结束，不带参数则 258 ms 退出码 0；用 `WM_SYSCOMMAND` 真实最小化后发深链，`IsIconic` 仍为 `true`，`focusPrimaryWindow()` 的 `restore()` 没生效；壳的 preload 也没有 focus/raise 类 IPC。
 - README（中英）：设置清单、「运行环境」说明、「桌面端怎么抬窗的」、已知限制四处按实测结果改写——插件照发深链，原生窗口能否上前台由壳决定；0.2.0-rc.2 上验证通过的结论与「深链必须在用户手势里发」的口径保留。
 
 ### 变更

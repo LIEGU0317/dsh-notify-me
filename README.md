@@ -292,7 +292,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 
 现在走插件自己的宿主路由。壳把 `dsh-app://app` 下除静态资源以外的所有路径原样转发给宿主 HTTP server（带 origin 校验、注入宿主 cookie），所以页面对 `/__dsh-notify-me/focus-window` 发 POST 是同源请求，没有 CORS 问题；宿主半（`lib/index.js`）本来就跑在 Electron 主进程的子进程里，`process.ppid` 就是主窗口所属的浏览器进程。点通知时：页面 POST → 宿主起一次 `powershell.exe` 跑 `lib/focus-window.ps1 -ProcessId <ppid>` → 脚本枚举该 pid 下可见、无 owner、非 toolwindow 的顶层窗口（优先类名 `Chrome_WidgetWin_1`，再按 `GetWindowRect` 面积取最大）→ 自适应激活 → 比对 `GetForegroundWindow()` 打印 `FOCUSED=1|0` → 宿主回 `200` / `202`。
 
-激活顺序是实的，来自 [discussions #10446 那份五种手法的实测](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913)：已经在前台就什么都不做（最常见的情况，零闪烁）；最小化了先 `SW_RESTORE`；然后合成一次 ALT 按键（`keybd_event` 按下抬起）给本线程前台权限，再 `SetForegroundWindow`；这一串都不行才退到 `SW_MINIMIZE` + `SW_RESTORE` 兜底。单独调 `SetForegroundWindow` 会被前台锁直接拒，按调用算、跟 `ForegroundLockTimeout` 无关；这也重新解释了 1.5.2 那套深链「时灵时不灵」——能抬起来的那些次，多半是系统在通知被点击时自己激活了应用。
+激活顺序是实的：已经在前台就什么都不做（最常见的情况，零闪烁）；最小化了先 `SW_RESTORE`；然后合成一次 ALT 按键（`keybd_event` 按下抬起）给本线程前台权限，再 `SetForegroundWindow`；这一串都不行才退到 `SW_MINIMIZE` + `SW_RESTORE` 兜底。单独调 `SetForegroundWindow` 会被前台锁直接拒，按调用算、跟 `ForegroundLockTimeout` 无关；这也重新解释了 1.5.2 那套深链「时灵时不灵」——能抬起来的那些次，多半是系统在通知被点击时自己激活了应用。
 
 实测（`powershell.exe` 5.1，同一轮跑完）：窗口在前台 ×3、最小化 + 记事本在前台 ×3、可见但被盖住 ×3，全部 `FOCUSED=1` 且前台窗口比对一致，最小化那几个的 `IsIconic` 都从 `true` 变回 `false`；记事本最大化完全遮挡、最小化 + 完全遮挡、`-ProcessId 0` 自动探测同样成功。脚本内部耗时最坏 434 ms，进程启动到退出最坏 782 ms，都在 8 秒上限内；`pwsh` 7.6 对照一轮行为一致，只是 `Add-Type` 编译慢约 100 ms（脚本刻意不用 7 的语法）。不存在的 pid、存在但没有可见窗口的 pid 都稳定 `FOCUSED=0` 并 `exit 0`。
 

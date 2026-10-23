@@ -335,16 +335,16 @@ npm pack --dry-run               # 预览发布包
 
 ## 致谢与贡献须知
 
-贡献者（按 handle 列出，链接指向他们参与的 PR / issue）：
+贡献者（头像点进各自的 GitHub 主页，条目里的链接是他们参与的 PR / issue）：
 
-- [@AgMahone](https://github.com/AgMahone) — [#7](https://github.com/chromoany/dsh-notify-me/pull/7)：0.1.6+ / 0.2.0 宿主代际支持，以及通知双响、cordis 查找路径的报障与复测；
-- [@d0ublecl1ck](https://github.com/d0ublecl1ck) — [#8](https://github.com/chromoany/dsh-notify-me/pull/8)：子代理会话静音（`ignoreSubagent`）与配套测试、文档；1.4.0 里「只静音后台子代理、当前打开的照常提醒」的口径同样出自他在 #8 讨论里的建议，落地由维护者完成；
-- [@EliteOtaku](https://github.com/EliteOtaku) — [#9](https://github.com/chromoany/dsh-notify-me/issues/9)：桌面端抬窗链路（1.5.2）的逐层排查与真实壳三轮复测——确认点通知抬窗 + 切会话稳定生效，并定位出「无用户手势的脚本化注入被 Chromium 静默丢弃」这一复现差异，纠正了最初「沙箱拦死」的判断；
-- [@Wh1stle05](https://github.com/Wh1stle05) — [#10](https://github.com/chromoany/dsh-notify-me/pull/10)：「音效来源」功能（内置合成音 / 自定义音频文件 / 系统通知音，「需要你」与「回复完成」各自独立选），含设置页交互、回落链与测试、文档；「系统通知音」试听改发测试通知、假 React 按索引跨渲染保持 hook 状态这两处修正同样出自该 PR。
-- [@yanzhaohui1999](https://github.com/yanzhaohui1999) — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14)：482 个会话下空闲页面烧 CPU 的性能报告（定位到 `currentSessionId()` 每行重扫全表，实测占 CPU 5.9%~6.5%）与修复（一次列表变化只推导一次「当前会话」），并带先红后绿的回归断言——4 行与 40 行的列表变化代价必须相等（上游报 7 vs 43，修后 5 vs 5）。
-- [@RiZhiZhaoYi](https://github.com/RiZhiZhaoYi) — [#12](https://github.com/chromoany/dsh-notify-me/issues/12)：外部通知转发（Discord Webhook / Bark / Gotify / 自定义 Webhook）的功能建议与使用场景（1.7.0）。
-- [@yuexian7](https://github.com/yuexian7) — [#17](https://github.com/chromoany/dsh-notify-me/issues/17)：安卓端收消息的诉求——Discord 在国内不便、Bark 没有安卓端，只能自己搭后台中转；1.13.0 的飞书 / Server酱 / WxPusher 三种目标、自动重试与失败记录都是据此做的。
-- [@shrekcg](https://github.com/shrekcg) — [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：把「人在前台但离开了」并入离开判定（`idleMinutes`，默认 3 分钟）、「回复完成」按哪个对话完成决定是否提醒（`donePolicy` 三选一）、通知自动消失的三档策略（`autoDismiss`），并带上对应冒烟用例与旧配置迁移；1.12.0 落地时维护者补了闲置到期补发被压下的审批、删掉残留的页内审批卡片、补齐文档与版本。
+- <a href="https://github.com/AgMahone"><img src="https://github.com/AgMahone.png?size=48" width="24" height="24" alt="@AgMahone"></a> — [#7](https://github.com/chromoany/dsh-notify-me/pull/7)：0.1.6+ / 0.2.0 宿主代际支持，以及通知双响、cordis 查找路径的报障与复测；
+- <a href="https://github.com/d0ublecl1ck"><img src="https://github.com/d0ublecl1ck.png?size=48" width="24" height="24" alt="@d0ublecl1ck"></a> — [#8](https://github.com/chromoany/dsh-notify-me/pull/8)：子代理会话静音（`ignoreSubagent`）与配套测试、文档；1.4.0 里「只静音后台子代理、当前打开的照常提醒」的口径同样出自他在 #8 讨论里的建议，落地由维护者完成；
+- <a href="https://github.com/EliteOtaku"><img src="https://github.com/EliteOtaku.png?size=48" width="24" height="24" alt="@EliteOtaku"></a> — [#9](https://github.com/chromoany/dsh-notify-me/issues/9)：桌面端抬窗链路（1.5.2）的逐层排查与真实壳三轮复测——确认点通知抬窗 + 切会话稳定生效，并定位出「无用户手势的脚本化注入被 Chromium 静默丢弃」这一复现差异，纠正了最初「沙箱拦死」的判断；
+- <a href="https://github.com/Wh1stle05"><img src="https://github.com/Wh1stle05.png?size=48" width="24" height="24" alt="@Wh1stle05"></a> — [#10](https://github.com/chromoany/dsh-notify-me/pull/10)：「音效来源」功能（内置合成音 / 自定义音频文件 / 系统通知音，「需要你」与「回复完成」各自独立选），含设置页交互、回落链与测试、文档；「系统通知音」试听改发测试通知、假 React 按索引跨渲染保持 hook 状态这两处修正同样出自该 PR。
+- <a href="https://github.com/yanzhaohui1999"><img src="https://github.com/yanzhaohui1999.png?size=48" width="24" height="24" alt="@yanzhaohui1999"></a> — [#13](https://github.com/chromoany/dsh-notify-me/issues/13) / [#14](https://github.com/chromoany/dsh-notify-me/pull/14)：482 个会话下空闲页面烧 CPU 的性能报告（定位到 `currentSessionId()` 每行重扫全表，实测占 CPU 5.9%~6.5%）与修复（一次列表变化只推导一次「当前会话」），并带先红后绿的回归断言——4 行与 40 行的列表变化代价必须相等（上游报 7 vs 43，修后 5 vs 5）。
+- <a href="https://github.com/RiZhiZhaoYi"><img src="https://github.com/RiZhiZhaoYi.png?size=48" width="24" height="24" alt="@RiZhiZhaoYi"></a> — [#12](https://github.com/chromoany/dsh-notify-me/issues/12)：外部通知转发（Discord Webhook / Bark / Gotify / 自定义 Webhook）的功能建议与使用场景（1.7.0）。
+- <a href="https://github.com/yuexian7"><img src="https://github.com/yuexian7.png?size=48" width="24" height="24" alt="@yuexian7"></a> — [#17](https://github.com/chromoany/dsh-notify-me/issues/17)：安卓端收消息的诉求——Discord 在国内不便、Bark 没有安卓端，只能自己搭后台中转；1.13.0 的飞书 / Server酱 / WxPusher 三种目标、自动重试与失败记录都是据此做的。
+- <a href="https://github.com/shrekcg"><img src="https://github.com/shrekcg.png?size=48" width="24" height="24" alt="@shrekcg"></a> — [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：把「人在前台但离开了」并入离开判定（`idleMinutes`，默认 3 分钟）、「回复完成」按哪个对话完成决定是否提醒（`donePolicy` 三选一）、通知自动消失的三档策略（`autoDismiss`），并带上对应冒烟用例与旧配置迁移；1.12.0 落地时维护者补了闲置到期补发被压下的审批、删掉残留的页内审批卡片、补齐文档与版本。
 
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。
 

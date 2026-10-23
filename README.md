@@ -346,7 +346,6 @@ npm pack --dry-run               # 预览发布包
 - [@yuexian7](https://github.com/yuexian7) — [#17](https://github.com/chromoany/dsh-notify-me/issues/17)：安卓端收消息的诉求——Discord 在国内不便、Bark 没有安卓端，只能自己搭后台中转；1.13.0 的飞书 / Server酱 / WxPusher 三种目标、自动重试与失败记录都是据此做的。
 - [@shrekcg](https://github.com/shrekcg) — [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：把「人在前台但离开了」并入离开判定（`idleMinutes`，默认 3 分钟）、「回复完成」按哪个对话完成决定是否提醒（`donePolicy` 三选一）、通知自动消失的三档策略（`autoDismiss`），并带上对应冒烟用例与旧配置迁移；1.12.0 落地时维护者补了闲置到期补发被压下的审批、删掉残留的页内审批卡片、补齐文档与版本。
 
-- [@xinming-chenniang](https://github.com/xinming-chenniang) — [deepseek-harness discussions #10446](https://github.com/deepseek-ai/deepseek-harness/discussions/10446#discussioncomment-19143913)：五种 Win32 抬窗手法的实测对照（单独 `SetForegroundWindow` 被前台锁拒、合成 ALT 键后通过、最小化→恢复两种场景都有效），以及「宿主注册同源路由 + PowerShell 兜底链」这条绕法的可运行验证；1.14.0 的宿主路由与 `lib/focus-window.ps1` 的直接依据。
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。
 
 ## License

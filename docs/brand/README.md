@@ -21,9 +21,14 @@
 
 ## 为什么不能替换设置左侧导航那一行的图标
 
-DSH 的设置外壳（`@deepseek-ai/dsh-client-ui-settings-general`）按分区 id 硬编码导航图标：只认 `account` / `models` / `agent-presets` / `plugins` / `archived-sessions`，其余分区一律 `IconSettingsOutlineMedium`（默认齿轮），`settings.section` 账本里也没有图标字段。
+DSH 的设置外壳（`@deepseek-ai/dsh-client-ui-settings-general`）按分区 id 硬编码导航图标：只认 `account` / `models` / `agent-presets` / `plugins` / `archived-sessions`，其余分区一律 `IconSettingsOutlineMedium`（默认齿轮），`settings.section` 账本里也没有图标字段。所以 1.9.1 起改成渲染后补丁：插件按本地化标签找到自己那一行的导航按钮，把宿主生成的 `<svg>` 换成同款铃铛，并沿用宿主给的 icon class。宿主换结构时补丁自动放弃，回落到默认齿轮。
 
-所以 1.9.1 起改成渲染后补丁（`lib/client.js` 的 `installNavBell()`）：设置面板打开后，按本地化标签找到插件那一行的导航按钮，把宿主生成的 `<svg>` 换成 `icon-outline.svg` 的同款形状，并沿用宿主给的 icon class（class 名是 CSS module hash，跨版本会变，不能写死）。面板每次打开都是新的 portal，因此用 MutationObserver 跟随；宿主换结构时补丁自动放弃，回落到默认齿轮。
+<details>
+<summary>展开补丁的实现方式</summary>
+
+`lib/client.js` 的 `installNavBell()` 在设置面板打开后执行。class 名是 CSS module hash，跨版本会变，不能写死；面板每次打开都是新的 portal，因此用 MutationObserver 跟随重渲染。
+
+</details>
 
 ## 重新生成位图
 
@@ -32,4 +37,4 @@ DSH 的设置外壳（`@deepseek-ai/dsh-client-ui-settings-general`）按分区 
 node docs/brand/render-icons.mjs
 ```
 
-`render-icons.mjs` 通过 CDP 让 headless Edge 按目标尺寸渲染 SVG（透明背景），并重拍 `preview.png`。它需要那个 9444 端口的浏览器，别对着自己日常的 Edge 窗口跑。
+`render-icons.mjs` 通过 CDP 让 headless Edge 按目标尺寸渲染 SVG（透明背景），并重拍 `preview.png`。它需要那个 9444 端口的浏览器，别对着自己日常的 Edge 窗口跑；上面的 Edge 路径按你本机的安装位置改。

@@ -1,0 +1,72 @@
+name: 功能建议 / Feature request
+description: 想要新渠道、新时机、新设置项，或觉得现有行为该改时用这个。也接受英文填写。
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先翻一下 README 的「[提醒渠道](https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E6%8F%90%E9%86%92%E6%B8%A0%E9%81%93)」「[提醒时机](https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E6%8F%90%E9%86%92%E6%97%B6%E6%9C%BA)」「[外部推送](https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E5%A4%96%E9%83%A8%E6%8E%A8%E9%80%81)」——有些需求现在就能用设置项拼出来。
+
+        English is fine — answer in English if that's easier.
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 场景 / The situation
+      description: 什么情况下会漏掉提醒？现在靠什么兜？
+      placeholder: 例如：同时跑好几个长任务，人离开电脑，回来只看到一堆完成状态，分不清哪个先结束。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 希望怎么做 / What you want
+      description: 想要哪种渠道、在什么时机、哪个设置项。说清能接受什么代价也有用（例如要多授权一次、要自己去配 webhook）。
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选或现在的绕法 / Alternatives
+      description: 试过别的办法吗？为什么不够用？
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 涉及范围 / Scope
+      options:
+        - 新渠道（接入某个通知服务）
+        - 现有渠道的行为或时机
+        - 设置项或界面
+        - 通知文案与语言
+        - 其他
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: 愿意提 PR 吗 / Willing to send a PR?
+      options:
+        - 可以提，会照 README 的「开发自检」跑一遍
+        - 可以试，但需要有人带一下
+        - 这次先不动手
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充 / Anything else
+      description: 截图、别家工具的做法、参考链接都放这里。
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        版本号、排期和合入方式由维护者定；外部 PR 会以维护者提交落地，署名口径见 README「致谢与贡献须知」。

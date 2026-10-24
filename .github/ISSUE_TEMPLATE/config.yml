@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 已知限制 / Known limitations
+    url: "https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E5%B7%B2%E7%9F%A5%E9%99%90%E5%88%B6"
+    about: 先看这里——宿主权限、桌面端与 Web 的差异、以及目前确定做不到的事。
+  - name: 兼容性 / Compatibility
+    url: "https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E5%85%BC%E5%AE%B9%E6%80%A7"
+    about: 支持哪些 DSH 宿主版本，以及怎么确认插件真的挂上了。
+  - name: 安装与配置 / Install and configure
+    url: "https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E5%AE%89%E8%A3%85"
+    about: 安装步骤、设置页各开关的含义、外部推送怎么接。

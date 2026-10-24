@@ -1,0 +1,114 @@
+name: Bug 报告 / Bug report
+description: 提醒没弹出、弹错、崩溃，或设置怎么调都不生效时用这个。也接受英文填写。
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        贴一条 `window.__dshNotifyMe.debug()` 的输出，通常能省掉一整轮追问。
+        **先自查**：[已知限制](https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E5%B7%B2%E7%9F%A5%E9%99%90%E5%88%B6)、[兼容性](https://github.com/chromoany/dsh-notify-me/blob/main/README.md#%E5%85%BC%E5%AE%B9%E6%80%A7)，以及设置页「运行环境与诊断」里的检测结果。
+
+        English is fine — answer in English if that's easier.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境 / Environment
+      description: 四行都填上，缺一项通常就得多问一轮。
+      value: |
+        DSH 版本：
+        宿主：Web / 桌面端
+        浏览器或操作系统：
+        插件版本（设置页底部那行）：
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象 / What happened
+      description: 哪一类提醒、在什么时机、你实际看到什么（或者没看到什么）。
+      placeholder: 例如：会话跑完时系统通知不弹，设置页里渠道都开着、通知权限也给了。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps
+      description: 编号写。偶发的也写：出现时你在做什么，大概几次里出一次。
+      placeholder: |
+        1. 打开 DSH，进入某个会话
+        2. 让会话跑到完成
+        3. 观察系统通知
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期 vs 实际 / Expected vs actual
+      placeholder: |
+        预期：
+        实际：
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug
+    attributes:
+      label: debug() 输出 / debug() output
+      description: |
+        打开开发者工具，在控制台执行 `JSON.stringify(window.__dshNotifyMe.debug(), null, 2)`，把结果原样贴进来。桌面端同样适用。
+        里面 `external.deadLettersLog` 会带会话标题和通知摘要，**贴之前把 title / body 删掉或打码**；webhook 地址和 token 也不要贴。
+      render: json
+    validations:
+      required: false
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 哪一类提醒 / Which alert
+      multiple: true
+      options:
+        - 需要你操作（审批、提问、方案确认）
+        - 回复完成
+        - 审批按钮（通知上直接同意 / 拒绝）
+        - 外部推送
+        - 不确定
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: channels
+    attributes:
+      label: 受影响的渠道 / Affected channels
+      options:
+        - label: 系统通知
+        - label: 提示音
+        - label: 标签页标题的 🔔 / ✅ 标记
+        - label: 外部推送（飞书 / Discord / Server酱 等）
+        - label: 桌面端抬窗
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: 已经试过的 / Already tried
+      description: 改设置、换浏览器、重装插件、看控制台报错——试过什么，结果如何。
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我看过「已知限制」和「兼容性」，确认不是那里写明的限制
+          required: true
+        - label: 上面贴了 debug()，或说明了为什么拿不到（插件没加载、控制台没有这个对象）
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        版本号、插件版本和 debug() 已经带了大部分排查需要的信息；会话内容不会被收集，但贴之前仍建议自己过一遍。

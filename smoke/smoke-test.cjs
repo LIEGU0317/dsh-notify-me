@@ -1836,6 +1836,144 @@ function uniqueToastTags() {
   console.log('toast tags OK: done=' + doneTags.join(' | ') + ' approval=' + approvalTag);
 }
 
+// ── issue #18: toast tags must fit the platform's 64-character limit ───────
+// Windows refuses a toast whose final tag — Chromium spells it
+// "n#<origin>#<tag>" — is longer than 64 characters. The desktop page's
+// dsh-app://app origin takes 16 of them and the approval test's tag was 51, so
+// 67 in total: the constructor threw, showToast() swallowed it, and the settings
+// page had already printed "sent". Every tag now goes through toastTag(), which
+// spends whatever the origin leaves.
+function toastTagLimits() {
+  console.log('\n— toast tags fit the platform tag limit (issue #18) —');
+  const raised = [];
+  class CaptureNotification {
+    constructor(title, config) { this.title = title; this.config = config; raised.push(this); }
+    close() {}
+  }
+  CaptureNotification.permission = 'granted';
+  CaptureNotification.requestPermission = () => Promise.resolve('granted');
+  // The origin is part of the platform's tag, so the budget is per origin: boot
+  // the desktop one first, which is what the report was about.
+  const bootAt = (origin) => bootBundle({
+    withNotification: true,
+    extend(sandbox, windowStub) {
+      sandbox.location = { origin };
+      sandbox.Notification = CaptureNotification;
+      windowStub.Notification = CaptureNotification;
+    },
+  });
+
+  const DESKTOP_ORIGIN = 'dsh-app://app';
+  const desktopBudget = 64 - 3 - DESKTOP_ORIGIN.length;
+  const desktop = bootAt(DESKTOP_ORIGIN);
+  const host = buildHost({ withSessionStatus: true });
+  desktop.doc.hidden = true; desktop.doc.visibilityState = 'hidden';
+  desktop.mod.apply(host.ctx);
+  const api = desktop.win.__dshNotifyMe;
+  assert(api.debug().notifyTagBudget === desktopBudget,
+    'the desktop origin leaves ' + desktopBudget + ' tag characters, got ' + api.debug().notifyTagBudget);
+
+  // 1) the reported case: the approval test button
+  raised.length = 0;
+  api.test('approval');
+  const testTag = raised[0] && raised[0].config.tag;
+  assert(testTag && testTag.length <= desktopBudget,
+    'the approval test tag fits the desktop budget, got ' + testTag);
+  assert(/^dsh-notify-me-attention-t[0-9a-z]+$/.test(testTag),
+    'the approval test keeps the attention prefix and a short key, got ' + testTag);
+  assert(testTag.indexOf('test:approval:') === -1, 'the 51-character test key is gone');
+
+  // 2) a real interaction key far longer than the budget is cut, not refused
+  const longKey = 'approval:' + 'k'.repeat(90);
+  const answerable = () => {};
+  host.setStatus(new Map([['s1', statusRow(approval(longKey, { answer: answerable }))]]));
+  host.notifyStatus();
+  const longTag = raised[raised.length - 1].config.tag;
+  assert(longTag.length <= desktopBudget,
+    'a long interaction key is cut to the budget, got ' + longTag.length + ' chars');
+  assert(longTag.indexOf('dsh-notify-me-attention-') === 0,
+    'the readable prefix survives the cut, got ' + longTag);
+  assert(longTag !== 'dsh-notify-me-attention-' + longKey, 'the raw key is never used as the tag');
+  assert(/^dsh-notify-me-attention-.+-[0-9a-z]{1,7}$/.test(longTag),
+    'a cut tag ends with the FNV-1a base36 tail, got ' + longTag);
+
+  // 3) truncation must not merge two different waits into one tag
+  host.setStatus(new Map([['s1', statusRow(null)]]));
+  host.notifyStatus();
+  host.setStatus(new Map([['s1', statusRow(approval('approval:' + 'j'.repeat(90), { answer: answerable }))]]));
+  host.notifyStatus();
+  const otherTag = raised[raised.length - 1].config.tag;
+  assert(otherTag !== longTag, 'two long keys keep distinct tags, got ' + otherTag);
+  host.setStatus(new Map([['s1', statusRow(null)]]));
+  host.notifyStatus();
+  for (const c of [...host.cleanups]) c();
+
+  // 4) a longer web origin shrinks the budget and the tag with it
+  const WEB_ORIGIN = 'http://192.168.100.200:13555';
+  const webBudget = 64 - 3 - WEB_ORIGIN.length;
+  const web = bootAt(WEB_ORIGIN);
+  const webHost = buildHost({ withSessionStatus: true });
+  web.doc.hidden = true; web.doc.visibilityState = 'hidden';
+  web.mod.apply(webHost.ctx);
+  const webApi = web.win.__dshNotifyMe;
+  assert(webApi.debug().notifyTagBudget === webBudget,
+    'a ' + WEB_ORIGIN.length + '-character web origin leaves ' + webBudget + ', got ' + webApi.debug().notifyTagBudget);
+  raised.length = 0;
+  webHost.setStatus(new Map([['s1', statusRow(approval('approval:101', { answer: answerable }))]]));
+  webHost.notifyStatus();
+  const webTag = raised[0] && raised[0].config.tag;
+  assert(webTag && webTag.length <= webBudget,
+    'the same approval tag shrinks to the web budget, got ' + webTag);
+  assert(webTag.length < 'dsh-notify-me-attention-approval:101'.length,
+    'the web case really did have to cut it, got ' + webTag);
+  for (const c of [...webHost.cleanups]) c();
+
+  // 5) a platform refusal is recorded instead of vanishing
+  const REFUSAL = 'The size of the notification tag is too large';
+  function RefusingNotification() { throw new Error(REFUSAL); }
+  RefusingNotification.permission = 'granted';
+  RefusingNotification.requestPermission = () => Promise.resolve('granted');
+  const refusing = bootBundle({
+    withNotification: true,
+    extend(sandbox, windowStub) {
+      sandbox.Notification = RefusingNotification;
+      windowStub.Notification = RefusingNotification;
+    },
+  });
+  const rhost = buildHost({ withUiSession: false });
+  refusing.mod.apply(rhost.ctx);
+  const said = refusing.win.__dshNotifyMe.test('approval');
+  const rejected = refusing.win.__dshNotifyMe.debug().lastToastReject;
+  assert(rejected && rejected.message === REFUSAL,
+    'debug() keeps the last platform refusal, got ' + JSON.stringify(rejected));
+  assert(rejected.length <= desktopBudget,
+    'the refusal records the tag length it tried, got ' + rejected.length);
+  assert(said.indexOf('refused=' + REFUSAL) !== -1,
+    'api.test() reports the refusal instead of claiming delivery, got ' + said);
+  for (const c of [...rhost.cleanups]) c();
+
+  // 6) the settings page reports the refusal instead of "sent"
+  const settings = settingsBoot(null, null, {
+    withNotification: true,
+    seed(sandbox) {
+      sandbox.Notification = RefusingNotification;
+      sandbox.window.Notification = RefusingNotification;
+    },
+  });
+  const testButton = settings.find((n) => n.props && typeof n.props.onClick === 'function'
+    && Array.isArray(n.children) && n.children[0] === '测试「审批按钮」');
+  assert(testButton, 'the approval test button renders');
+  testButton.props.onClick();
+  const feedback = settings.renderNow();
+  assert(feedback.indexOf('系统拒收了这条通知：' + REFUSAL) !== -1,
+    'the settings page reports the refusal, got ' + feedback);
+  assert(feedback.indexOf('已发送测试提醒') === -1, 'no "sent" feedback survives a refusal');
+  settings.cleanup();
+
+  console.log('toast tag limits OK: desktop budget=' + desktopBudget + ' test=' + testTag
+    + ' long=' + longTag + ' web=' + webTag + ' refused=' + rejected.message);
+}
+
 // ── settings page: the new rows actually render ───────────────────────────
 // Hook state is kept per index and survives re-renders, the way React keeps it,
 // so a case can press a control and then read the copy the press produced.
@@ -2688,6 +2826,7 @@ async function autoDismissPolicy() {
   await desktopRaiseChannel();
   await soundSources();
   uniqueToastTags();
+  toastTagLimits();
   settingsSoundRows();
   await externalWebhooks();
   await settingsExternalRows();

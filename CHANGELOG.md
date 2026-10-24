@@ -2,6 +2,22 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.14.2] — 2026-10-24
+
+### 修复
+
+- **桌面端「测试「审批按钮」」不再无声失败**：Windows 拒收 tag 超过 64 字符的通知，而 Chromium 交给平台的最终 tag 是 `n#<origin>#<tag>`——`dsh-app://app` 先占 16 字符。旧测试 key 是 `test:approval:<13 位毫秒>`，tag 51 字符、整条 67，`new Notification()` 构造时直接抛 `The size of the notification tag is too large`，异常被 `showToast()` 的空 catch 吞掉，设置页却已经写了「已发送」（issue #18）。现在所有 tag 统一走 `toastTag()`：按 `location.origin` 算出平台前缀的占位，超长时保留可读前缀、尾部换 FNV-1a base36 哈希收口；审批 tag 仍由 `closeNotificationTag()` 用记录里的同一个字符串关闭。
+- **测试 key 缩短**：`"t" + Date.now().toString(36)`（10 字符），tag 33 字符，离桌面端 48 的天花板有余量。
+- **拒收不再静默**：`showToast()` 的 catch 与 Service Worker `showNotification()` 的异步 reject 都记一条 `lastToastReject`（tag 长度 + 平台原文），写进 `debug()`；设置页测试按钮命中拒收时改报「系统拒收了这条通知：<原因>」，`window.__dshNotifyMe.test()` 的返回串带上 `refused=`。
+
+### 测试
+
+- 冒烟新增 `toastTagLimits()`：桌面 origin（`dsh-app://app`）下 budget 为 48、审批测试 tag ≤ 48 且不再含 51 字符的旧 key；100 字符的交互 key 被哈希收口、仍以 `dsh-notify-me-attention-` 开头、两个不同长 key 收口后不撞；28 字符的 Web origin 把 budget 压到 33 并让同一条审批 tag 跟着缩短；`Notification` 构造抛错时 `debug().lastToastReject` 记下平台原文与 tag 长度，`api.test()` 报 `refused=`。`npm test` 全绿。
+
+### 文档
+
+- `docs/listing.md` 版本口径同步到 1.14.2。
+
 ## [1.14.1] — 2026-10-23
 
 ### 修复

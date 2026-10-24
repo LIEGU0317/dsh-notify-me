@@ -80,7 +80,7 @@ Web 用户可再测审批按钮，通知上会带「同意 / 拒绝」。桌面�
 window.__dshNotifyMe.test("done")        // 「完成」示例
 window.__dshNotifyMe.test("attention")   // 「需要你」示例
 window.__dshNotifyMe.test("approval")    // 桥可用时带「同意 / 拒绝」按钮；否则只发普通通知（桌面端即如此）
-window.__dshNotifyMe.debug()             // 桥接状态看 bridge 字段，active = 按钮可用
+window.__dshNotifyMe.debug()             // 桥接状态看 bridge 字段（active = 按钮可用）；最近一次被平台拒发的原因在 lastToastReject
 ```
 
 没有测试通知时，先检查：通知权限是否被拒绝（在页面上点一下 → 选「允许」；或地址栏锁 → 站点设置 → 通知 → 允许 → 刷新）、装完没重启 DSH、系统设置里浏览器通知被关。
@@ -326,6 +326,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 **平台差异**
 
 - 快捷裁决按钮要 Service Worker：`http://127.0.0.1`、`https` 可用，`http://192.168.x.x` 这类局域网地址不行；**桌面端（`dsh-app://`）已实测无法注册 Service Worker**（宿主未开放 `allowServiceWorkers` 特权），审批通知退回无按钮样式。宿主不渲染通知按钮时，`debug()` 的 `bridge` 字段会说明原因，其余功能不受影响。
+- Windows 的系统通知标签上限 64 字符，而 Chromium 交给平台的是 `n#<origin>#<tag>` 整串——桌面页面 `dsh-app://app` 一项就占去 16 个。插件按当前 `location.origin` 算剩余预算，超长时保留可读前缀、尾部换成短哈希，所以 `debug()` 里看到的标签可能被截短；平台仍然拒发时，原文记在 `debug().lastToastReject`，设置页的测试按钮也会如实报出来，不再「提示已发送但什么都没弹」。
 - 桌面端（Windows）点通知后窗口仍可能抬不起来：目标窗口属于更高完整性级别（提权 / UAC）、在另一个虚拟桌面、前台被别的进程反复抢回去，或窗口被 `SW_HIDE` 隐藏到托盘时，宿主脚本回 `FOCUSED=0`、路由回 `202`，对话照常切（详见[桌面端怎么抬窗的](#桌面端怎么抬窗的)）。
 - macOS：提醒、提示音、标题标记、点通知跳转都没有平台假设，照常工作；但 DSH Desktop（Electron）的系统通知要求应用已签名，未签名的通知直接发不出去，官方 macOS 版是否满足这一前提未实测；审批按钮在 macOS 桌面宿主上的渲染同样未实测（Windows 桌面端已实测不渲染）。
 
@@ -348,7 +349,7 @@ DSH Desktop 是一层 Electron 壳，页面跑在 `dsh-app://app` 下：DOM 的 
 ```powershell
 node --check lib\client.js
 node --check lib\index.js
-node smoke\smoke-test.cjs        # 离线状态机冒烟测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）+ 闲置判定与通知自收
+node smoke\smoke-test.cjs        # 离线状态机冒烟测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）+ 闲置判定与通知自收 + 通知标签长度收口
 node smoke\cordis-host-test.mjs  # 真 cordis 端到端（找不到本机 DSH 时自动跳过）
 powershell -NoProfile -File lib\focus-window.ps1 -ProcessId 0   # 手动验证抬窗脚本，末行应是 FOCUSED=1
 npm pack --dry-run               # 预览发布包

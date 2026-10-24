@@ -80,7 +80,7 @@ Web users can also test the approval buttons, which then appear on the notificat
 window.__dshNotifyMe.test("done")        // "reply finished" sample
 window.__dshNotifyMe.test("attention")   // "needs you" sample
 window.__dshNotifyMe.test("approval")    // Approve / Reject when the bridge is available; a plain notification otherwise (which is what Desktop gets)
-window.__dshNotifyMe.debug()             // the bridge field reports the state: "active" = buttons work
+window.__dshNotifyMe.debug()             // the bridge field reports the state ("active" = buttons work); a refused toast leaves its platform message in lastToastReject
 ```
 
 If no test notification appears, check in this order: whether the notification permission was declined (click once on the page and choose **Allow**; or address-bar lock → Site settings → Notifications → Allow → reload), whether DSH was restarted after installing, and whether the browser's notifications are switched off in the OS settings.
@@ -327,6 +327,7 @@ The cases where it will not raise are the same ones listed under [Known limitati
 **Platform differences**
 
 - Quick-decision buttons need a Service Worker: `http://127.0.0.1` and `https` work, `http://192.168.x.x`-style LAN addresses do not; **the Desktop (`dsh-app://`) is tested and cannot register a Service Worker** (the host does not grant the `allowServiceWorkers` privilege), so approval toasts fall back to their buttonless form. When the host renders no notification buttons, the `bridge` field of `debug()` explains why, and nothing else is affected.
+- Windows caps a toast tag at 64 characters, and Chromium hands the platform the whole `n#<origin>#<tag>` string — the desktop page's `dsh-app://app` alone takes 16. The plugin sizes each tag against the current `location.origin` and, when it does not fit, keeps a readable prefix and swaps the tail for a short hash, so a tag seen through `debug()` may be shortened; if the platform still refuses one, its message lands in `debug().lastToastReject` and the settings test button reports it instead of claiming the toast was sent.
 - On Desktop (Windows) a toast click can still fail to raise the window: when the target window is owned by a higher integrity level (elevated / UAC), sits on another virtual desktop, has its foreground repeatedly stolen by another process, or is hidden to the tray with `SW_HIDE`, the host script answers `FOCUSED=0` and the route answers `202`, with the conversation switch intact (see [How the Desktop window gets raised](#how-the-desktop-window-gets-raised)).
 - macOS: alerts, sound, the title marker and toast-click navigation carry no platform assumptions and work as usual; but DSH Desktop (Electron) system notifications require the app to be signed — an unsigned build simply emits no notification — and whether the official macOS build meets that precondition is untested; notification button rendering on the macOS desktop host is likewise untested (the Windows desktop host is tested and renders none).
 
@@ -349,7 +350,7 @@ The cases where it will not raise are the same ones listed under [Known limitati
 ```powershell
 node --check lib\client.js
 node --check lib\index.js
-node smoke\smoke-test.cjs        # offline state-machine test: three host generations + master switch + zh/en cases + the quick-decision bridge (worker half included) + idle detection and toast self-dismiss
+node smoke\smoke-test.cjs        # offline state-machine test: three host generations + master switch + zh/en cases + the quick-decision bridge (worker half included) + idle detection and toast self-dismiss + toast tag length handling
 node smoke\cordis-host-test.mjs  # real-cordis end-to-end (skips when no local DSH installation is found)
 powershell -NoProfile -File lib\focus-window.ps1 -ProcessId 0   # manual raise test, the last line should be FOCUSED=1
 npm pack --dry-run               # preview the published tarball

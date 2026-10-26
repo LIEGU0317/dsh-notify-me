@@ -674,7 +674,8 @@ async function modernHost() {
     'a background session still alerts while the page is visible');
 
   // 8) the reply-finished channel on the face snapshot (0.2.0-rc.2 no longer
-  //    carries nodes, so the toast body has no assistant snippet)
+  //    carries nodes, so the toast body has no assistant snippet) — and it names
+  //    the on-screen session from its list row instead of the old placeholder
   await sleep(400);
   doc.hidden = true; doc.visibilityState = 'hidden';
   events.length = 0;
@@ -689,7 +690,7 @@ async function modernHost() {
   host.notifyFace();
   const done = events.filter((e) => e.kind === 'done');
   assert(done.length === 1, 'reply-finished fires on the current host, got ' + JSON.stringify(done));
-  assert(done[0].body === '当前对话', 'no assistant snippet without snapshot nodes, got ' + JSON.stringify(done[0].body));
+  assert(done[0].body === '当前会话', 'the reply-finished body carries the list title (issue #20), got ' + JSON.stringify(done[0].body));
 
   // 9) master switch off silences the interaction channel too
   win.__dshNotifyMe.setConfig({ enabled: false, language: 'zh' });
@@ -780,6 +781,63 @@ async function modernHost() {
   for (const c of [...host.cleanups]) c();
   assert(host.listeners.status.length === 0, 'sessionStatus unsubscribed after dispose');
   assert(host.listeners.face.length === 0, 'face unsubscribed after dispose');
+}
+
+// ────────── the on-screen session's alert names the conversation (1.14.3) ──────────
+// issue #20: a notification about the conversation already on screen started with
+// the localized "当前对话 / Current conversation" placeholder while every other row
+// carried its sidebar title. The face adapter now reads the title off the same
+// list row the sidebar draws; the placeholder only stands in for a session the
+// list cannot title yet.
+async function currentSessionTitle() {
+  console.log('\n— the on-screen session is labelled with its own title (issue #20) —');
+  const title = '重构通知中心';
+  const b = bootBundle();
+  const host = buildHost({ withSessionStatus: true, withWorkspace: true });
+  const { mod, win, doc, events } = b;
+  mod.apply(host.ctx);
+  win.__dshNotifyMe.onEvent = (kind, payload) => events.push({ kind, ...payload });
+  doc.hidden = true; doc.visibilityState = 'hidden';
+  host.setList({ ids: ['s1'], byId: { s1: { running: true, displayTitle: title, retainedBy: { mainView: 1 } } }, phase: 'ready' });
+  host.notifyList();
+  host.setFace({ sessionId: 's1', running: true, nodes: [], pending: [] });
+  host.notifyFace();
+
+  // 1) a wait: the body leads with the conversation title, not the placeholder
+  events.length = 0;
+  host.setFace({ sessionId: 's1', running: true, nodes: [], pending: [{ key: 'question:201', kind: 'question', sessionId: 's1', payload: null }] });
+  host.notifyFace();
+  const att = events.filter((e) => e.kind === 'attention');
+  assert(att.length === 1, 'the on-screen wait alerted, got ' + JSON.stringify(events));
+  assert(att[0].body.indexOf(title) === 0, 'the body leads with the session title, got ' + JSON.stringify(att[0].body));
+  assert(att[0].body.indexOf('当前对话') === -1, 'the placeholder is gone, got ' + JSON.stringify(att[0].body));
+
+  // 2) "reply finished" carries the same label
+  events.length = 0;
+  await sleep(400); // outside the attention -> done same-tick guard
+  host.setFace({ sessionId: 's1', running: false, nodes: [], pending: [] });
+  host.notifyFace();
+  const done = events.filter((e) => e.kind === 'done');
+  assert(done.length === 1 && done[0].body === title,
+    'the reply-finished body is the session title, got ' + JSON.stringify(done));
+  for (const c of [...host.cleanups]) c();
+
+  // 3) a session the list cannot title yet keeps the placeholder as the fallback
+  const fb = bootBundle();
+  const fhost = buildHost({ withSessionStatus: true, withWorkspace: true });
+  fb.mod.apply(fhost.ctx);
+  fb.win.__dshNotifyMe.onEvent = (kind, payload) => fb.events.push({ kind, ...payload });
+  fb.doc.hidden = true; fb.doc.visibilityState = 'hidden';
+  fhost.setList({ ids: ['s2'], byId: { s2: { running: true, retainedBy: { mainView: 1 } } }, phase: 'ready' });
+  fhost.notifyList();
+  fhost.setFace({ sessionId: 's2', running: true, nodes: [], pending: [] });
+  fhost.notifyFace();
+  fhost.setFace({ sessionId: 's2', running: false, nodes: [], pending: [] });
+  fhost.notifyFace();
+  const fbDone = fb.events.filter((e) => e.kind === 'done');
+  assert(fbDone.length === 1 && fbDone[0].body === '当前对话',
+    'an untitled session falls back to the placeholder, got ' + JSON.stringify(fbDone));
+  for (const c of [...fhost.cleanups]) c();
 }
 
 // ────────── completion-unread level flag (0.1.6+, 1.5.0) ──────────
@@ -2820,6 +2878,7 @@ async function autoDismissPolicy() {
   await legacyHost();
   await currentHost();
   await modernHost();
+  await currentSessionTitle();
   await subagentSessions();
   await completionUnreadChannel();
   await quickActionsHost();

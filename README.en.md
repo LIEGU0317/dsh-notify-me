@@ -103,6 +103,8 @@ dsh-notify-me decouples **supervision** from **sitting in front of the screen**:
 
 **Reply finished** also covers background sessions. A finished but unread session keeps the `✅ Reply finished ·` title marker until opened. Title markers are independent of the alert policy.
 
+The first line of the alert body is the session title: the conversation you have open is treated like any other, instead of falling back to "Current conversation"; the placeholder only appears for a brand-new session whose title the host has not published yet.
+
 > **Background** subagent child sessions are **not** alerted about by default: DSH lists each of them as its own session, but they are steps inside the parent conversation's turn, so an alert for them is only noise. The subagent session you have open is not part of this and alerts as usual. Settings → "Ignore subagent sessions" turns the mute off.
 
 ## Configure it from DSH Settings
@@ -370,6 +372,8 @@ npm pack --dry-run               # preview the published tarball
 | <a href="https://github.com/RiZhiZhaoYi"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/RiZhiZhaoYi.png" width="40" height="40" alt="@RiZhiZhaoYi"></a> | [#12](https://github.com/chromoany/dsh-notify-me/issues/12): external notification forwarding (Discord / Bark / Gotify / custom webhook) |
 | <a href="https://github.com/yuexian7"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/yuexian7.png" width="40" height="40" alt="@yuexian7"></a> | [#17](https://github.com/chromoany/dsh-notify-me/issues/17): the ask for Android delivery, which led to the Feishu / ServerChan / WxPusher targets |
 | <a href="https://github.com/shrekcg"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/shrekcg.png" width="40" height="40" alt="@shrekcg"></a> | [#16](https://github.com/chromoany/dsh-notify-me/pull/16): away detection (`idleMinutes`), reply-done routing (`donePolicy`), auto-dismiss (`autoDismiss`) |
+| <a href="https://github.com/Donald-Yip"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/Donald-Yip.png" width="40" height="40" alt="@Donald-Yip"></a> | [#18](https://github.com/chromoany/dsh-notify-me/issues/18): the report that a Windows notification tag over the 64-character cap made the platform silently reject the approval test toast |
+| <a href="https://github.com/dunxuan"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/dunxuan.png" width="40" height="40" alt="@dunxuan"></a> | [#20](https://github.com/chromoany/dsh-notify-me/issues/20): the report that alerts for the open session showed a placeholder instead of the session title |
 
 Attribution policy: external PRs are landed as maintainer commits — the original commit is not reused and no Co-authored-by trailer is added, so GitHub's contributors graph lists the maintainer only and contributors are credited above.
 

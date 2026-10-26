@@ -103,6 +103,8 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 **回复完成**也覆盖后台会话；完成但还没看时，标题带 `✅ 回复完成 ·` 标记，打开对应会话即撤。标题标记不受提醒策略限制。
 
+通知正文的第一行是会话标题：当前正在看的会话和其他会话一样显示自己的标题，只有宿主还没给出标题的新会话才用「当前对话」占位符兜底。
+
 > **后台**子代理（subagent）子会话的等待与完成默认**不提醒**：DSH 把每个子代理子会话列成独立会话，但它们是所属主对话那一轮里的步骤，提醒只会是噪音。你当前打开的那个子代理会话不算在内，照常提醒。设置页「子代理会话不提醒」可关掉这个静音。
 
 ## 在 DSH 设置里改配置
@@ -369,6 +371,8 @@ npm pack --dry-run               # 预览发布包
 | <a href="https://github.com/RiZhiZhaoYi"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/RiZhiZhaoYi.png" width="40" height="40" alt="@RiZhiZhaoYi"></a> | [#12](https://github.com/chromoany/dsh-notify-me/issues/12)：外部通知转发（Discord / Bark / Gotify / 自定义 Webhook） |
 | <a href="https://github.com/yuexian7"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/yuexian7.png" width="40" height="40" alt="@yuexian7"></a> | [#17](https://github.com/chromoany/dsh-notify-me/issues/17)：安卓端收消息的诉求，促成飞书 / Server酱 / WxPusher 三种目标 |
 | <a href="https://github.com/shrekcg"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/shrekcg.png" width="40" height="40" alt="@shrekcg"></a> | [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：离开判定 `idleMinutes`、「回复完成」判定 `donePolicy`、自动消失 `autoDismiss` |
+| <a href="https://github.com/Donald-Yip"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/Donald-Yip.png" width="40" height="40" alt="@Donald-Yip"></a> | [#18](https://github.com/chromoany/dsh-notify-me/issues/18)：Windows 通知 tag 超过 64 字符上限、审批测试通知被平台静默拒收的报告 |
+| <a href="https://github.com/dunxuan"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/dunxuan.png" width="40" height="40" alt="@dunxuan"></a> | [#20](https://github.com/chromoany/dsh-notify-me/issues/20)：当前会话的通知正文用占位符、未取会话标题的报告 |
 
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。
 

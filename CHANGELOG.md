@@ -20,6 +20,7 @@ All notable changes to **dsh-notify-me** are documented here.
 
 - README 的抬窗章节改成按平台叙述，`501` 闸门的说明改成「非 Windows 宿主」，已知限制里补上非 Windows 深链的前提（系统注册 `x-scheme-handler/dsh`、壳处理第二次启动）。
 - `lib/index.js` 顶部注释改成按平台表述：这条路由是 Windows 专用的，其他桌面端页面根本不发请求。
+- `docs/listing.md` 版本口径同步到 1.14.4。
 
 ## [1.14.3] — 2026-10-26
 

@@ -2205,6 +2205,8 @@ function settingsBoot(seedConfig, seedSound, opts) {
     find: (pred) => { let hit = null; walk(tree, (n) => { if (!hit && pred(n)) hit = n; }); return hit; },
     findAll: (pred) => { const out = []; walk(tree, (n) => { if (pred(n)) out.push(n); }); return out; },
     configNow: () => b.win.__dshNotifyMe.config,
+    debugNow: () => b.win.__dshNotifyMe.debug(),
+    apiNow: () => b.win.__dshNotifyMe,
     // Press the exact control the user presses, then re-render the way React
     // would, so the feedback the press produced is readable.
     press: pressAria,
@@ -2480,6 +2482,40 @@ async function externalWebhooks() {
   assert(r3c.sent === 1, 'the retried delivery succeeds, got ' + JSON.stringify(r3c));
   assert(retryOk.calls.length === 3, 'a dropped connection is retried, got ' + retryOk.calls.length + ' calls');
 
+  // 6d) switching forwarding off stops a retry that is already on a timer.
+  const cancel = bootWeb(() => ({ ok: false, status: 500 }), {
+    externalEnabled: true,
+    externalRetryDelays: [30, 30],
+    externalTargets: [{ id: 't1', type: 'custom', url: 'https://hook.example/x' }],
+  });
+  cancel.b.doc.hidden = true;
+  cancel.b.doc.visibilityState = 'hidden';
+  cancel.host.setList({ ids: ['s9'], byId: { s9: { running: true, displayTitle: '后台任务', retainedBy: {} } }, phase: 'ready' });
+  cancel.host.notifyList();
+  cancel.host.setStatus(new Map([['s9', statusRow(question('question:904', { sessionId: 's9' }))]]));
+  cancel.host.notifyStatus();
+  await flush();
+  assert(cancel.calls.length === 1, 'the first attempt went out, got ' + cancel.calls.length);
+  cancel.win.__dshNotifyMe.setConfig({ externalEnabled: false });
+  await new Promise((r) => setTimeout(r, 200));
+  assert(cancel.calls.length === 1, 'no retry after forwarding is switched off, got ' + cancel.calls.length);
+  const dc = cancel.win.__dshNotifyMe.debug().external;
+  assert(dc.failed === 0 && dc.deadLetters === 0,
+    'a cancelled delivery is not recorded as a failure, got failed=' + dc.failed + ' dead=' + dc.deadLetters);
+
+  // 6e) a 2xx whose body is not the service JSON cannot confirm delivery.
+  const html = bootWeb(() => ({
+    ok: true,
+    status: 200,
+    text: () => Promise.resolve('<html>proxy interstitial</html>'),
+  }), {
+    externalEnabled: true,
+    externalTargets: [{ id: 't1', type: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/KEY' }],
+  });
+  const rHtml = await html.win.__dshNotifyMe.testExternal();
+  assert(rHtml.unverified === 1 && rHtml.sent === 0,
+    'a 2xx without the service JSON is unverified, got ' + JSON.stringify(rHtml));
+
   // 7) bark gets its third chance in the classic GET shape.
   const bark = bootWeb((rec) => {
     if (rec.opts.method === 'GET') {
@@ -2513,7 +2549,14 @@ async function externalWebhooks() {
   //    receiving side will do.
   const crypto = require('crypto');
   const SECRET = 'SIGN-SECRET';
-  const multi = bootWeb(() => ({ ok: true, status: 200, text: () => Promise.resolve('{"code":0}') }), {
+  // WxPusher answers code 1000 on success, the others code 0; the verdict now
+  // actually reads these (postOnce used to lose the target type), so the stub
+  // has to answer like the services do.
+  const multi = bootWeb((rec) => ({
+    ok: true,
+    status: 200,
+    text: () => Promise.resolve(rec.url.indexOf('wxpusher') !== -1 ? '{"code":1000}' : '{"code":0}'),
+  }), {
     externalEnabled: true,
     externalTargets: [
       { id: 'f', type: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/X', secret: SECRET },
@@ -2541,6 +2584,16 @@ async function externalWebhooks() {
   const wp = JSON.parse(wpCall.body);
   assert(wp.appToken === 'AT_x' && wp.contentType === 1, 'wxpusher carries the app token');
   assert(Array.isArray(wp.uids) && wp.uids.length === 2 && wp.uids[1] === 'UID_b', 'wxpusher splits the receiver UIDs, got ' + JSON.stringify(wp.uids));
+
+  // 9b) a 200 carrying the service's own failure code is a failure, not a send:
+  //     this is what a wrong Feishu token looks like from the page.
+  const badToken = bootWeb(() => ({ ok: true, status: 200, text: () => Promise.resolve('{"code":19001,"msg":"param invalid"}') }), {
+    externalEnabled: true,
+    externalTargets: [{ id: 'f', type: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/X' }],
+  });
+  const rBad = await badToken.win.__dshNotifyMe.testExternal();
+  assert(rBad.failed === 1 && rBad.statuses[0].indexOf('param invalid') !== -1,
+    'a service-level error code is reported as failed, got ' + JSON.stringify(rBad));
 
   const cuCall = multi.calls.find((c) => c.url === 'https://hook.example/x');
   const cuBody = JSON.parse(cuCall.body);
@@ -3019,6 +3072,67 @@ function deniedPermissionFeedback() {
   s.cleanup();
 }
 
+function storageFailureFeedback() {
+  console.log('\n— a refused config write is reported instead of looking saved —');
+  const s = settingsBoot(null, null, {
+    withNotification: true,
+    seed(sandbox) {
+      sandbox.localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+    },
+  });
+  const api = s.apiNow();
+  api.setConfig({ language: 'en' });
+  assert(api.debug().configStored === false, 'debug() reports the failed write');
+  const text = s.renderNow();
+  assert(text.indexOf('设置没能保存') !== -1, 'the page says the setting did not stick, got ' + text.slice(0, 200));
+  // The live copy still works for this page, and the next patch builds on it
+  // instead of on the stale storage copy.
+  api.setConfig({ sound: false });
+  assert(api.debug().language === 'en' && api.debug().sound === false,
+    'in-memory settings survive a failed write, got ' + JSON.stringify({ lang: api.debug().language, sound: api.debug().sound }));
+  s.cleanup();
+}
+
+function permissionReask() {
+  console.log('\n— an explicit test click re-asks a permission prompt that was dismissed —');
+  let asks = 0;
+  function DefaultNotification() {}
+  DefaultNotification.permission = 'default';
+  DefaultNotification.requestPermission = () => { asks += 1; return Promise.resolve('denied'); };
+  const s = settingsBoot(null, null, {
+    withNotification: true,
+    seed(sandbox) {
+      sandbox.Notification = DefaultNotification;
+      sandbox.window.Notification = DefaultNotification;
+    },
+  });
+  const button = s.find((n) => n.props && typeof n.props.onClick === 'function'
+    && Array.isArray(n.children) && n.children[0] === '测试「审批按钮」');
+  assert(button, 'the approval test button renders while permission is default');
+  button.props.onClick();
+  button.props.onClick();
+  assert(asks === 2, 'each explicit test click asks again, got ' + asks + ' request(s)');
+  s.cleanup();
+}
+
+async function approvalTestToastSurvivesMark() {
+  console.log('\n— the approval test toast keeps working buttons after the title mark goes —');
+  const s = settingsBoot(null, null, { withNotification: true });
+  const button = s.find((n) => n.props && typeof n.props.onClick === 'function'
+    && Array.isArray(n.children) && n.children[0] === '测试「审批按钮」');
+  assert(button, 'the approval test button renders');
+  button.props.onClick();
+  const api = s.apiNow();
+  const keys = api.debug().actionKeys;
+  assert(keys.length === 1, 'the test toast books its record, got ' + JSON.stringify(keys));
+  await sleep(6500); // past TEST_MARK_RELEASE_MS (6 s), before the 12 s close
+  assert(api.debug().actionKeys.length === 1,
+    'the record survives the title-mark release, got ' + JSON.stringify(api.debug().actionKeys));
+  assert(api.decide(keys[0], 'allowed-once') === true,
+    'the buttons still settle the test toast after the mark is gone');
+  s.cleanup();
+}
+
 (async () => {
   await legacyHost();
   await currentHost();
@@ -3038,6 +3152,9 @@ function deniedPermissionFeedback() {
   corruptStoredConfig();
   deniedPermissionFeedback();
   await swRefusalFeedback();
+  storageFailureFeedback();
+  permissionReask();
+  await approvalTestToastSurvivesMark();
   await listChangeDerivation();
   await awayWithoutHiding();
   await awayWhileFocusedAndIdle();

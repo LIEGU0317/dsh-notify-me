@@ -51,12 +51,12 @@ DSH Web / Desktop 的通知插件，让你敢不开完整访问，也不必一�
 
 已安装 DSH CLI 的用户，在终端执行：
 
-```powershell
+```sh
 # 安装并自动挂载进 web profile
 dsh plugin --profile web add dsh-notify-me
 ```
 
-重启 `dsh web`，然后硬刷新页面（Ctrl+Shift+R）。如果你使用其他 Web profile，请把命令中的 `web` 换成实际名称。
+重启 `dsh web`，然后硬刷新页面（Windows / Linux 是 Ctrl+Shift+R，macOS 是 Cmd+Shift+R）。如果你使用其他 Web profile，请把命令中的 `web` 换成实际名称。
 
 ### DSH Desktop
 
@@ -132,7 +132,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 - **后台的判定**：切到别的应用、被别的窗口盖住、最小化都算；窗口一直留在前台但 3 分钟没有任何键鼠输入同样算，`idleMinutes: 0` 退回只看窗口。
 - **「当前对话不弹通知」何时补发**：窗口转到后台或闲置超时后照常提醒；若你已处理掉就作废。
 - **「回复完成」三档**：「仅后台」＝不在看页面才提醒；「仅当前对话静默」＝屏幕上那条静默、别的对话照常提醒，多开对话时有用；「总是提醒」＝从不静默。老配置里的「窗口在前台时也提醒『回复完成』」开关自动迁移到这一项。
-- **「离开时保留」**：只有你人在页面前时才几秒后关闭，人不在时收到的那条留在通知中心等你回来；带「同意 / 拒绝」的审批通知仍按 12 秒走，同样不会在人不在时被撤掉。
+- **「离开时保留」**：你人在页面前时，普通通知几秒后自己收；人不在时收到的那条留在通知中心等你回来。带「同意 / 拒绝」的通知不设自动撤回，留到你点按钮、回页面把请求答掉、或被新请求顶替为止；桌面端画不出按钮的审批通知按 12 秒收，人不在时同样不撤。
 - **点击通知的兜底**：桌面端抬不起来时只切对话，原因记在 `debug().raiseLast` 里；关掉这一项后点通知不做任何事。
 
 </details>
@@ -289,7 +289,7 @@ window.__dshNotifyMe.testExternal()               // 显式外发测试：向有
 <details>
 <summary>展开按钮通知的记账与调窗口</summary>
 
-每条按钮通知按交互 key 记账，一次只认领一条等待；请求被页面里答掉、或被新请求顶替之后，残留通知上的按钮再点也不会误裁，只是安静地关掉。带按钮的通知停留 12 秒（普通通知 5 秒），到点自动撤；没来得及点就回页面里裁决，对话里的审批一直等着你。
+每条按钮通知按交互 key 记账，一次只认领一条等待；请求被页面里答掉、或被新请求顶替之后，残留通知上的按钮再点也不会误裁，只是安静地关掉。带按钮的通知不设自动撤回，等你点按钮或把请求答掉才消失；普通通知 5 秒自收，桌面端没有按钮的审批通知 12 秒自收。「通知自动消失」选「从不关闭」时，这两类都不收。没来得及点就回页面里裁决，对话里的审批一直等着你。
 
 点正文的「调窗口 + 切对话」也归 worker 这半侧调度：`client.focus()` 只调起一个窗口（优先当前可见的），也只让那个窗口切对话——多个 DSH 标签页不会互相抢焦点或一起乱切。
 
@@ -349,13 +349,19 @@ Windows 的激活顺序是实的：已经在前台就什么都不做（最常见
 
 ## 开发自检
 
-```powershell
-node --check lib\client.js
-node --check lib\index.js
-node smoke\smoke-test.cjs        # 离线状态机冒烟测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）+ 闲置判定与通知自收 + 通知标签长度收口
-node smoke\cordis-host-test.mjs  # 真 cordis 端到端（找不到本机 DSH 时自动跳过）
-powershell -NoProfile -File lib\focus-window.ps1 -ProcessId 0   # 手动验证抬窗脚本，末行应是 FOCUSED=1
+```sh
+node --check lib/client.js
+node --check lib/index.js
+npm test                         # smoke-test（状态机）+ host-route-test（宿主半路由）+ cordis-host-test
 npm pack --dry-run               # 预览发布包
+```
+
+`smoke/smoke-test.cjs` 是离线状态机测试：三代宿主 + 主开关 + 中英语言用例 + 快捷裁决桥（Service Worker 半侧一并跑）+ 闲置判定与通知自收 + 通知标签长度收口。`smoke/host-route-test.mjs` 不需要本机 DSH，`lib/index.js` 的路由、探针与 403/405/501 闸门在任何平台都会跑。
+
+改到 `lib/focus-window.ps1` 时（仅 Windows），另需手动跑一次：
+
+```powershell
+powershell -NoProfile -File lib/focus-window.ps1 -ProcessId 0   # 末行应是 FOCUSED=1
 ```
 
 `cordis-host-test.mjs` 会从本机 DSH 安装借 `@deepseek-ai/cordis`（依次探测 npm 全局目录、`~/.dsh/profiles/web/node_modules` 与 `~/.dsh/profiles/node_modules` 平铺回退目录）；源码 checkout 里没有 profile 依赖时，用 `DSH_CORDIS_PATH=<checkout>/vendor/cordis/lib/index.js` 指定即可。

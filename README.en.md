@@ -51,12 +51,12 @@ Just the plugin's own panel (the real component, on the same dark theme as the h
 
 With the DSH CLI already installed, run in a terminal:
 
-```powershell
+```sh
 # Install and auto-mount into the web profile
 dsh plugin --profile web add dsh-notify-me
 ```
 
-Restart `dsh web`, then hard-refresh the page (Ctrl+Shift+R). If you use another Web profile, replace `web` with its actual name.
+Restart `dsh web`, then hard-refresh the page (Ctrl+Shift+R on Windows / Linux, Cmd+Shift+R on macOS). If you use another Web profile, replace `web` with its actual name.
 
 ### DSH Desktop
 
@@ -132,7 +132,7 @@ Open **Settings → Notify me**. The page lays out three blocks — how you get 
 - **What counts as background**: switching to another app, being covered by another window, or minimizing all count; a window left in front with 3 minutes of no keyboard or mouse input counts too, and `idleMinutes: 0` falls back to looking only at the window.
 - **When "stay quiet for the conversation on screen" is replayed**: as usual once the window goes to the background or the idle timer fires; if you already handled it, it is dropped.
 - **The three "reply finished" choices**: "background only" = alert when you are not watching the page; "quiet for the open one" = the one on screen stays silent while other conversations still alert, useful with several open; "always" = never suppress. An old profile's "also alert 'reply finished' while in front" switch migrates to this setting automatically.
-- **"Keep while away"**: a toast only closes a few seconds later while you are actually at the page; one that arrived while you were away stays in the notification centre until you come back. Approval toasts with Approve / Reject still follow their 12 s rule and are likewise not withdrawn while you are away.
+- **"Keep while away"**: while you are at the page a plain toast closes itself after a few seconds; one that arrived while you were away stays in the notification centre until you come back. A toast with Approve / Reject carries no auto-dismiss timer — it stays until you click a button, answer the request in the page, or a newer request replaces it; a desktop approval toast, which cannot render buttons, closes after 12 s and is likewise not withdrawn while you are away.
 - **Fallback for a toast click**: on Desktop a window that will not raise leaves only the conversation switch, with the reason in `debug().raiseLast`; turn this switch off and a click does nothing.
 
 </details>
@@ -290,7 +290,7 @@ Notifications with Approve / Reject buttons can only be raised by a Service Work
 <details>
 <summary>Button-toast bookkeeping and window raising</summary>
 
-Each button toast is booked against its interaction key, and one toast claims only one wait; once the request has been answered in the page, or replaced by a newer request, clicking the leftover buttons decides nothing and just closes it quietly. Button toasts stay 12 s (plain ones 5 s) and are withdrawn on their own; if you miss the click, the approval in the conversation is still waiting for you.
+Each button toast is booked against its interaction key, and one toast claims only one wait; once the request has been answered in the page, or replaced by a newer request, clicking the leftover buttons decides nothing and just closes it quietly. Button toasts carry no auto-dismiss timer — they stay until you click or answer; plain toasts close after 5 s, and a desktop approval toast without buttons after 12 s. With "never close" selected neither kind closes itself. If you miss the click, the approval in the conversation is still waiting for you.
 
 The "raise a window and switch its conversation" part of a body click is scheduled on the worker half as well: `client.focus()` raises exactly one window (a visible one first) and routes the conversation switch to that window alone, so several DSH tabs never fight over focus or all switch at once.
 
@@ -350,13 +350,19 @@ The cases where it will not raise are the same ones listed under [Known limitati
 
 ## Development
 
-```powershell
-node --check lib\client.js
-node --check lib\index.js
-node smoke\smoke-test.cjs        # offline state-machine test: three host generations + master switch + zh/en cases + the quick-decision bridge (worker half included) + idle detection and toast self-dismiss + toast tag length handling
-node smoke\cordis-host-test.mjs  # real-cordis end-to-end (skips when no local DSH installation is found)
-powershell -NoProfile -File lib\focus-window.ps1 -ProcessId 0   # manual raise test, the last line should be FOCUSED=1
+```sh
+node --check lib/client.js
+node --check lib/index.js
+npm test                         # smoke-test (state machine) + host-route-test (host half) + cordis-host-test
 npm pack --dry-run               # preview the published tarball
+```
+
+`smoke/smoke-test.cjs` is the offline state-machine suite: three host generations + master switch + zh/en cases + the quick-decision bridge (worker half included) + idle detection and toast self-dismiss + toast tag length handling. `smoke/host-route-test.mjs` needs no local DSH and runs the `lib/index.js` route, its probe and the 403/405/501 gate on every platform.
+
+When `lib/focus-window.ps1` changes (Windows only), also run it by hand:
+
+```powershell
+powershell -NoProfile -File lib/focus-window.ps1 -ProcessId 0   # the last line should be FOCUSED=1
 ```
 
 `cordis-host-test.mjs` borrows `@deepseek-ai/cordis` from a local DSH installation (it probes the global npm directory, `~/.dsh/profiles/web/node_modules` and the flat fallback `~/.dsh/profiles/node_modules` in turn); in a source checkout with no profile dependencies, point it there with `DSH_CORDIS_PATH=<checkout>/vendor/cordis/lib/index.js`.

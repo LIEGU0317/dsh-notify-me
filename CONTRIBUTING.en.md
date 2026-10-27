@@ -12,8 +12,8 @@ Decide the kind of change first. New features, or changes to alert timing and de
 
 ## Must pass before submitting
 
-```powershell
-npm test          # smoke-test + cordis-host-test (the latter skips when no host is found)
+```sh
+npm test          # smoke-test (state machine) + host-route-test (host half) + cordis-host-test (skips when no host is found)
 npm run pack      # confirm the published tarball holds no unexpected files
 ```
 
@@ -21,8 +21,8 @@ When `lib/focus-window.ps1` changes, also run the raise script manually; it has 
 
 ## Code conventions
 
-- `lib/client.js`: page-side logic. New user-facing notification copy goes into both `zh` and `en` under `TXT` (`lib/client.js:386`); settings panel copy lives in `UI_zh` (`lib/client.js:2442`) and `UI_en` (`lib/client.js:2592`). A missing side shows Chinese text, or nothing, in the other language.
-- New setting: a default in `DEFAULTS` (`lib/client.js:214`), a row in the settings panel, and a state-machine case in `smoke/smoke-test.cjs`.
+- `lib/client.js`: page-side logic. New user-facing notification copy goes into both `zh` and `en` under `TXT`; settings panel copy lives in `UI_zh` and `UI_en`. A missing side shows Chinese text, or nothing, in the other language.
+- New setting: a default in `DEFAULTS`, a row in the settings panel, and a state-machine case in `smoke/smoke-test.cjs`.
 - `lib/index.js`: host-side logic and the raise-window loopback route. Explain the motive before changing its gate; that route is the plugin's external security boundary.
 - `package.json`: the `files` whitelist decides what ships, so add new files there if they should be published. The `dsh.compatibility` release table is filled by the maintainer after real testing; do not add unverified versions.
 - Docs: `README.md` and `README.en.md` change together.

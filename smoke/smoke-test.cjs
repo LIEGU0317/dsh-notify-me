@@ -2936,6 +2936,89 @@ async function autoDismissPolicy() {
   console.log('auto-dismiss OK: kept while away, cleared while present, or fixed either way');
 }
 
+function corruptStoredConfig() {
+  console.log('\n— a stored config that is valid JSON but not an object falls back —');
+  // JSON.parse returns these happily; before the guard they made the default
+  // fill throw inside the bundle and left the page with no plugin at all.
+  for (const raw of ['null', '"x"', '7', '[]']) {
+    const b = bootBundle({
+      withNotification: true,
+      extend(sandbox) { sandbox.localStorage.setItem('dshNotifyMe.config', raw); },
+    });
+    const debug = b.win.__dshNotifyMe.debug();
+    assert(debug.enabled === true, JSON.stringify(raw) + ' falls back to the defaults, got ' + JSON.stringify(debug.enabled));
+    assert(debug.external.targets === 0, JSON.stringify(raw) + ' starts with no external targets');
+  }
+  console.log('corrupt config OK: null / string / number / array all fall back to the defaults');
+}
+
+// A worker refusal arrives a tick after the click. The settings page used to
+// read lastToastReject synchronously, so the button said "sent" for a toast the
+// platform had already refused — the surviving half of issue #18 on the path
+// that carries the Approve / Reject buttons.
+async function swRefusalFeedback() {
+  console.log('\n— a deferred worker refusal is not reported as sent —');
+  const asked = [];
+  const worker = {
+    register() {
+      return Promise.resolve({
+        active: {},
+        showNotification(title, opts) {
+          asked.push(opts && opts.tag);
+          return Promise.reject(new Error('The size of the notification tag is too large'));
+        },
+        getNotifications() { return []; },
+      });
+    },
+    addEventListener() {},
+  };
+  const s = settingsBoot(null, null, {
+    withNotification: true,
+    seed(sandbox) {
+      sandbox.navigator = { serviceWorker: worker };
+      sandbox.window.__DSH_BOOT__ = {
+        entries: [{ id: 'dsh-notify-me', url: '/plugins/??dsh-notify-me/client.js&rev=bbb' }],
+      };
+    },
+  });
+  await sleep(20); // register() and its statechange settle on a promise tick
+  const button = s.find((n) => n.props && typeof n.props.onClick === 'function'
+    && Array.isArray(n.children) && n.children[0] === '测试「审批按钮」');
+  assert(button, 'the approval test button renders while a worker is active');
+  button.props.onClick();
+  await sleep(20);
+  const text = s.renderNow();
+  assert(asked.length === 1, 'the worker was asked to show the toast once, got ' + asked.length);
+  assert(text.indexOf('系统拒收了这条通知：The size of the notification tag is too large') !== -1,
+    'the deferred refusal reaches the feedback line, got ' + text);
+  assert(text.indexOf('已发送测试提醒') === -1, 'no "sent" feedback survives the worker refusal');
+  s.cleanup();
+}
+
+function deniedPermissionFeedback() {
+  console.log('\n— a denied permission is reported, not "sent" —');
+  // showToast() returns before it touches anything when permission is missing,
+  // so no refusal is recorded and the old button claimed the toast went out.
+  function DeniedNotification() {}
+  DeniedNotification.permission = 'denied';
+  DeniedNotification.requestPermission = () => Promise.resolve('denied');
+  const s = settingsBoot(null, null, {
+    withNotification: true,
+    seed(sandbox) {
+      sandbox.Notification = DeniedNotification;
+      sandbox.window.Notification = DeniedNotification;
+    },
+  });
+  const button = s.find((n) => n.props && typeof n.props.onClick === 'function'
+    && Array.isArray(n.children) && n.children[0] === '测试「审批按钮」');
+  assert(button, 'the approval test button renders with permission denied');
+  button.props.onClick();
+  const text = s.renderNow();
+  assert(text.indexOf('通知权限还没给') !== -1, 'the row reports the missing permission, got ' + text);
+  assert(text.indexOf('已发送测试提醒') === -1, 'no "sent" feedback without permission');
+  s.cleanup();
+}
+
 (async () => {
   await legacyHost();
   await currentHost();
@@ -2952,6 +3035,9 @@ async function autoDismissPolicy() {
   await externalWebhooks();
   await settingsExternalRows();
   settingsAlertSetup();
+  corruptStoredConfig();
+  deniedPermissionFeedback();
+  await swRefusalFeedback();
   await listChangeDerivation();
   await awayWithoutHiding();
   await awayWhileFocusedAndIdle();

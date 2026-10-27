@@ -8,14 +8,18 @@ All notable changes to **dsh-notify-me** are documented here.
 
 - **非 Windows 桌面端点通知又能把窗口抬回前台了**：1.14.0 把抬窗整条换成宿主路由 + `lib/focus-window.ps1`，可这条路由只对 Windows 放行——宿主在非 `win32` 平台直接回 `501`，于是 Linux / macOS 上点通知只剩切会话，窗口留在后台（issue #21）。现在按平台分流：Windows 继续走宿主路由（深链在 `0.2.1-rc.2` 上复测 3/3 无效），其他桌面端恢复 1.5.2 到 1.13.0 的 `dsh://open` 隐藏 iframe——子框架导航绕过壳的顶层 `will-navigate`，交给系统协议注册，由壳的第二次启动处理 restore + show + focus。已在 Arch Linux + Electron 44.7（Plasma 6.8 / Wayland）上实测最小化与后台窗口都能抬回来；macOS 走同一条深链，未实测。
 - **`debug().raiseChannel` 不再依赖第一次点击**：字段改成按平台直接算（Windows `host-route`、其他桌面端 `dsh-deeplink`、浏览器 `window-focus`），装完打开设置页就能看到这台机器会走哪条通道；`raiseLast` 照旧记录最近一次尝试（深链记 `deeplink`，抬没抬起来要肉眼确认，它说不了）。
+- **「测试提醒」不再谎报已发送**：通知权限没给时，`showToast()` 在尝试之前就返回，设置页却照旧写「已发送测试提醒」；现在按钮直接报「通知权限还没给」。Service Worker 那条路径也一样——`showNotification()` 的拒收是异步的，旧代码同步读 `lastToastReject`，异步拒绝落地时页面早写过「已发送」了（issue #18 在唯一能带按钮的那条路径上的残余）。现在测试按钮等这个 promise 落定再报结果。
+- **存储里的配置不是对象时不再让插件整个起不来**：`JSON.parse` 对 `null`、`"x"`、`7` 都照收，随后填默认值的 `in` 判断在非对象上抛错，整个客户端模块挂掉、页面一条提醒都没有。现在只认普通对象，其余一律回落默认值（`lib/client.js` 的 `readConfig()`）。
 
 ### 测试
 
 - 冒烟在 `desktopRaiseChannel()` 里补上点击前的通道断言（Windows / macOS / Linux 三个 UA），以及 macOS 点通知只插一个 `dsh://open` 帧、不 POST 宿主路由的用例；Windows 的 `iframe` 断言文案改成「Windows 不发深链」。`npm test` 全绿（`cordis-host-test` 在本机无宿主，照旧跳过）。
+- 新增 `corruptStoredConfig()`（`null` / 字符串 / 数字 / 数组四种坏配置都能启动到默认值）、`deniedPermissionFeedback()`（权限被拒时测试按钮报没权限，不再写「已发送」）、`swRefusalFeedback()`（Worker 异步拒收后反馈行是「系统拒收了这条通知」）。两处修复都做过「改回去就挂」的反向验证。
 
 ### 文档
 
 - README 的抬窗章节改成按平台叙述，`501` 闸门的说明改成「非 Windows 宿主」，已知限制里补上非 Windows 深链的前提（系统注册 `x-scheme-handler/dsh`、壳处理第二次启动）。
+- `lib/index.js` 顶部注释改成按平台表述：这条路由是 Windows 专用的，其他桌面端页面根本不发请求。
 
 ## [1.14.3] — 2026-10-26
 

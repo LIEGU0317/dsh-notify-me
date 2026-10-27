@@ -80,7 +80,7 @@ Web users can also test the approval buttons, which then appear on the notificat
 window.__dshNotifyMe.test("done")        // "reply finished" sample
 window.__dshNotifyMe.test("attention")   // "needs you" sample
 window.__dshNotifyMe.test("approval")    // Approve / Reject when the bridge is available; a plain notification otherwise (which is what Desktop gets)
-window.__dshNotifyMe.debug()             // the bridge field reports the state ("active" = buttons work); a refused toast leaves its platform message in lastToastReject
+window.__dshNotifyMe.debug()             // bridge ("active" = buttons work), raiseChannel, the last raise attempt in raiseLast, a refused toast's platform message in lastToastReject, and configStored for whether the settings really persisted
 ```
 
 If no test notification appears, check in this order: whether the notification permission was declined (click once on the page and choose **Allow**; or address-bar lock → Site settings → Notifications → Allow → reload), whether DSH was restarted after installing, and whether the browser's notifications are switched off in the OS settings.
@@ -160,7 +160,8 @@ Off by default. Supports Discord Webhook / Bark / Gotify / Feishu group bots / S
 
 - **External notifications** (default off): forward each alert to your own push endpoints as well, so it reaches you away from the machine; any number of targets, each of which can be enabled or disabled on its own. "Forward 'needs you'" and "Forward 'reply finished'" switch independently; **Send test notification** sends one test message to every target (not limited by those two switches, and never pretending to be a real alert). Forwarding follows exactly the same trigger rules as local alerts ("stay quiet for the conversation on screen" and friends apply to it too); the alert text is sent as-is to the addresses you fill in, so **only use endpoints you trust**;
 - **What each target takes**: Discord — the webhook URL; Bark — `https://api.day.app/<device key>`; Gotify — `https://<server>/message?token=<app token>`; Feishu — the group-bot webhook plus an optional verification secret; ServerChan — the full `…/send/<SendKey>.send` URL; WxPusher — the appToken and the receiver UID; a custom endpoint receives one POST of JSON: `{source, event, title, body, text, sessionId, time}`;
-- **Reliable delivery**: failures that look transient (network error, 5xx, 429) are retried after 2 s and 6 s; anything else stops at once. A delivery that still fails is recorded in the failure log (10 entries at most — title and body snippet plus host only, never the full endpoint), which the settings page shows and can clear;
+- **Reliable delivery**: failures that look transient (network error, 5xx, 429) are retried after 2 s and 6 s; anything else stops at once. Switching forwarding off or deleting a target cancels a retry that is already on a timer — it is not counted as a failure and never reaches the failure log. A delivery that still fails is recorded in the failure log (10 entries at most — title and body snippet plus host only, never the full endpoint), which the settings page shows and can clear;
+- **Service codes and "unverified"**: a 2xx from Feishu / ServerChan / WxPusher also carries a service code (`0` for Feishu and ServerChan, `1000` for WxPusher); a wrong code is recorded as a failure with the service's own message, and a 2xx whose body is not that service's JSON (empty, or a proxy/WAF HTML page) is "sent but unverified" rather than a success;
 - **Per-target state**: the right end of each target row shows how its last delivery went (last delivery ok / sent-unverified / failed with the reason) next to a switch of its own, so an endpoint that is temporarily down can be turned off alone instead of muting a whole alert kind;
 - **Signing**: a custom target with a secret sends `X-DSH-Notify-Signature` (HMAC-SHA256 over the body, `sha256=<hex>`); a Feishu target with a secret carries `timestamp` / `sign` in the body per Feishu's own algorithm;
 - **Message template** (optional): Feishu / ServerChan / WxPusher / custom targets accept a template with `{{title}}` `{{body}}` `{{event}}` `{{time}}` `{{session}}`; empty means "title, newline, body";
@@ -185,7 +186,7 @@ The last block inside Advanced. The page protocol is detected automatically to t
 
 | Channel | What it does |
 | --- | --- |
-| System notification | Through the browser into the Windows action center / macOS Notification Center; clicking it returns to the conversation it came from. Web can carry Approve / Reject |
+| System notification | Through the browser into the Windows / macOS / Linux notification centre; clicking it returns to the conversation it came from. Web can carry Approve / Reject |
 | Sound | WebAudio cue by default, with different patterns for "needs you" and "done"; swap in a custom audio file, or hand the sound over to the system notification sound |
 | Tab title | `🔔 Action needed · …` / `✅ Reply finished · …`, following the alert language; gone once you open that session, and both markers can be up at the same time |
 | External push (optional, default off) | Forwards the same alert to Discord / Bark / Gotify / Feishu / ServerChan / WxPusher / a custom webhook |
@@ -241,6 +242,7 @@ window.__dshNotifyMe.setConfig({
   volume: 0.5,                // volume 0..1
   autoFocus: true,            // a toast click returns to the conversation that raised it
   quickActions: true,         // Approve / Reject buttons on approval toasts
+  hostEnv: "auto",            // runtime: 'auto' detect | 'desktop' force the app | 'web' force the browser
   externalEnabled: false,     // external forwarding master switch (default off: no endpoint, nothing is sent)
   externalAttention: true,    // forward "needs you" (exactly the same trigger rules as local alerts)
   externalDone: true,         // forward "reply finished"
@@ -381,6 +383,7 @@ powershell -NoProfile -File lib/focus-window.ps1 -ProcessId 0   # the last line 
 | <a href="https://github.com/shrekcg"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/shrekcg.png" width="40" height="40" alt="@shrekcg"></a> | [#16](https://github.com/chromoany/dsh-notify-me/pull/16): away detection (`idleMinutes`), reply-done routing (`donePolicy`), auto-dismiss (`autoDismiss`) |
 | <a href="https://github.com/Donald-Yip"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/Donald-Yip.png" width="40" height="40" alt="@Donald-Yip"></a> | [#18](https://github.com/chromoany/dsh-notify-me/issues/18): the report that a Windows notification tag over the 64-character cap made the platform silently reject the approval test toast |
 | <a href="https://github.com/dunxuan"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/dunxuan.png" width="40" height="40" alt="@dunxuan"></a> | [#20](https://github.com/chromoany/dsh-notify-me/issues/20): the report that alerts for the open session showed a placeholder instead of the session title |
+| <a href="https://github.com/unnamed42"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/unnamed42.png" width="40" height="40" alt="@unnamed42"></a> | [#21](https://github.com/chromoany/dsh-notify-me/issues/21) / [#22](https://github.com/chromoany/dsh-notify-me/pull/22): the Linux `dsh://open` raise-path report and patch, which brought the deep link back on macOS / Linux in 1.14.4 |
 
 Attribution policy: external PRs are landed as maintainer commits — the original commit is not reused and no Co-authored-by trailer is added, so GitHub's contributors graph lists the maintainer only and contributors are credited above.
 

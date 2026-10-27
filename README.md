@@ -80,7 +80,7 @@ Web 用户可再测审批按钮，通知上会带「同意 / 拒绝」。桌面�
 window.__dshNotifyMe.test("done")        // 「完成」示例
 window.__dshNotifyMe.test("attention")   // 「需要你」示例
 window.__dshNotifyMe.test("approval")    // 桥可用时带「同意 / 拒绝」按钮；否则只发普通通知（桌面端即如此）
-window.__dshNotifyMe.debug()             // 桥接状态看 bridge 字段（active = 按钮可用）；最近一次被平台拒发的原因在 lastToastReject
+window.__dshNotifyMe.debug()             // 桥接看 bridge（active = 按钮可用）、抬窗通道 raiseChannel、最近一次尝试 raiseLast、平台拒发原文 lastToastReject、设置是否真存下来 configStored
 ```
 
 没有测试通知时，先检查：通知权限是否被拒绝（在页面上点一下 → 选「允许」；或地址栏锁 → 站点设置 → 通知 → 允许 → 刷新）、装完没重启 DSH、系统设置里浏览器通知被关。
@@ -160,7 +160,8 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 - **外部通知**（默认关）：把提醒同时转发到你自己的推送端点，人不在电脑前也能收到；可加多个目标，每个目标可单独启停。「转发「需要你」」「转发「回复完成」」各自独立开关；**发送测试通知**往所有目标发一条测试消息（不受这两类开关限制，也不会冒充真提醒）。转发跟本地提醒走同一套触发规则（「当前对话不弹通知」等开关同样管它）；提醒正文会原样发往你填的地址，**只填你自己信任的端点**；
 - **各目标的填法**：Discord 填 Webhook 地址；Bark 填 `https://api.day.app/<设备密钥>`；Gotify 填 `https://<服务器>/message?token=<应用令牌>`；飞书填群机器人 Webhook，可选填签名校验密钥；Server酱 填 `…/send/<SendKey>.send` 完整地址；WxPusher 填 appToken 与接收者 UID；自定义端点收一条 POST JSON：`{source, event, title, body, text, sessionId, time}`；
-- **可靠投递**：明显是临时故障的失败（网络中断、5xx、429）按 2 秒 / 6 秒自动重试两次，其它错误立即停；重试仍失败会把这一条记进「失败记录」（最多 10 条，只留标题与正文摘要和主机名，不留完整端点），设置页能一眼看到并清空；
+- **可靠投递**：明显是临时故障的失败（网络中断、5xx、429）按 2 秒 / 6 秒自动重试两次，其它错误立即停；关掉「外部通知」总开关或删掉某个目标后，已经排在定时器上的重试立刻作废，既不算失败也不进失败记录；重试仍失败会把这一条记进「失败记录」（最多 10 条，只留标题与正文摘要和主机名，不留完整端点），设置页能一眼看到并清空；
+- **服务码与「不可确认」**：飞书 / Server酱 / WxPusher 的 2xx 还会读返回体里的服务码（飞书与 Server酱是 `0`，WxPusher 是 `1000`），码不对按失败记并带服务端文案；2xx 但正文不是该服务的 JSON（空白、代理或 WAF 的网页）记「已送出不可确认」，不冒充成功；
 - **每个目标的状态**：目标行右侧显示它最近一次投递的结果（上次成功 / 上次已送出但不可确认 / 上次失败 + 原因），并各自带一个启停开关——某个端点临时不可用就单独关掉它，不用关掉整类事件；
 - **签名**：自定义目标填了签名密钥时，请求带 `X-DSH-Notify-Signature`（对请求体做 HMAC-SHA256，`sha256=<hex>`）；飞书填了签名密钥时按官方算法在请求体里带 `timestamp` / `sign`；
 - **消息模板**（可选）：飞书 / Server酱 / WxPusher / 自定义目标可填模板，占位符 `{{title}}` `{{body}}` `{{event}}` `{{time}}` `{{session}}`，留空默认是「标题 + 换行 + 正文」；
@@ -185,7 +186,7 @@ dsh-notify-me 把「监督」和「守在屏幕前」解耦：只在真的出现
 
 | 渠道 | 表现 |
 | --- | --- |
-| 系统通知 | 经浏览器进 Windows 通知中心 / macOS 通知中心，点击回到对应对话；Web 端可带「同意 / 拒绝」 |
+| 系统通知 | 经浏览器进 Windows / macOS / Linux 的系统通知中心，点击回到对应对话；Web 端可带「同意 / 拒绝」 |
 | 提示音 | 默认 WebAudio 合成音，「需要你」与「完成」音型不同；可换自定义音频，或交给系统通知音 |
 | 标签页标题 | `🔔 需要你 · …` / `✅ 回复完成 · …`（随通知语言切换），打开对应会话即消失；两种标记可同时出现 |
 | 外部推送（可选，默认关） | 把同一条提醒转发到 Discord / Bark / Gotify / 飞书 / Server酱 / WxPusher / 自定义 Webhook |
@@ -241,6 +242,7 @@ window.__dshNotifyMe.setConfig({
   volume: 0.5,                // 音量 0~1
   autoFocus: true,            // 点通知回到提醒所属的对话
   quickActions: true,         // 审批通知上的「同意 / 拒绝」按钮
+  hostEnv: "auto",            // 运行环境：'auto' 自动识别 | 'desktop' 强制桌面端 | 'web' 强制 Web
   externalEnabled: false,     // 外部通知转发主开关（默认关：不填端点就什么都不发）
   externalAttention: true,    // 转发「需要你」（触发规则跟本地提醒完全一致）
   externalDone: true,         // 转发「回复完成」
@@ -380,6 +382,7 @@ powershell -NoProfile -File lib/focus-window.ps1 -ProcessId 0   # 末行应是 F
 | <a href="https://github.com/shrekcg"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/shrekcg.png" width="40" height="40" alt="@shrekcg"></a> | [#16](https://github.com/chromoany/dsh-notify-me/pull/16)：离开判定 `idleMinutes`、「回复完成」判定 `donePolicy`、自动消失 `autoDismiss` |
 | <a href="https://github.com/Donald-Yip"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/Donald-Yip.png" width="40" height="40" alt="@Donald-Yip"></a> | [#18](https://github.com/chromoany/dsh-notify-me/issues/18)：Windows 通知 tag 超过 64 字符上限、审批测试通知被平台静默拒收的报告 |
 | <a href="https://github.com/dunxuan"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/dunxuan.png" width="40" height="40" alt="@dunxuan"></a> | [#20](https://github.com/chromoany/dsh-notify-me/issues/20)：当前会话的通知正文用占位符、未取会话标题的报告 |
+| <a href="https://github.com/unnamed42"><img src="https://raw.githubusercontent.com/chromoany/dsh-notify-me/main/docs/contributors/unnamed42.png" width="40" height="40" alt="@unnamed42"></a> | [#21](https://github.com/chromoany/dsh-notify-me/issues/21) / [#22](https://github.com/chromoany/dsh-notify-me/pull/22)：Linux 上 `dsh://open` 抬窗失效的报障与补丁，1.14.4 起 macOS / Linux 恢复深链抬窗 |
 
 署名口径：本仓库收编外部 PR 时以维护者提交落地——不沿用原 commit、不挂 Co-authored-by，GitHub 的 contributors 图只显示维护者，贡献者以上面的致谢署名。
 

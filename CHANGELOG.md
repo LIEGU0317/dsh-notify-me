@@ -2,6 +2,22 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.14.7] — 2026-10-27
+
+### 修复
+
+- **「恢复默认设置」写不进去时也会说了**：`resetConfig()` 以前把 `localStorage.removeItem` 的失败吞掉，设置页照样提示「已恢复默认设置」，刷新之后旧配置又回来。现在它和保存走同一条 `configWriteFailed`，`debug().configStored` 为假、页面上写明「设置没能保存」。
+
+### 文档
+
+- README 中英：提醒渠道补上 Linux；外部推送写明关掉转发会取消已排队的重试、服务码非成功值记失败、2xx 但不是该服务的 JSON 记「已送出不可确认」；控制台示例补 `hostEnv` 与 `debug()` 的 `raiseChannel` / `raiseLast` / `configStored`。
+- 致谢新增 unnamed42（[#21](https://github.com/chromoany/dsh-notify-me/issues/21) / [#22](https://github.com/chromoany/dsh-notify-me/pull/22)：Linux 上 `dsh://open` 抬窗失效的报障与补丁）。11 张贡献者头像统一成同一套 48×48 圆形遮罩，`dunxuan`、`Donald-Yip` 之前分别是方形和自带 alpha。
+- `docs/listing.md` 版本口径同步到 1.14.7。
+
+### 测试
+
+- `storageFailureFeedback()` 现在也覆盖写失败后的 `resetConfig()`：`configStored` 仍为假，提示行还在。
+
 ## [1.14.6] — 2026-10-27
 
 ### 修复

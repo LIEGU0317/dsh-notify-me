@@ -3103,6 +3103,7 @@ function storageFailureFeedback() {
     withNotification: true,
     seed(sandbox) {
       sandbox.localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+      sandbox.localStorage.removeItem = () => { throw new Error('QuotaExceededError'); };
     },
   });
   const api = s.apiNow();
@@ -3115,6 +3116,11 @@ function storageFailureFeedback() {
   api.setConfig({ sound: false });
   assert(api.debug().language === 'en' && api.debug().sound === false,
     'in-memory settings survive a failed write, got ' + JSON.stringify({ lang: api.debug().language, sound: api.debug().sound }));
+  // A refused reset is the same lie in the other direction: the page says the
+  // defaults are back while storage still holds the old profile.
+  api.resetConfig();
+  assert(api.debug().configStored === false, 'a refused reset reports the failed write');
+  assert(s.renderNow().indexOf('设置没能保存') !== -1, 'the warning survives a refused reset');
   s.cleanup();
 }
 

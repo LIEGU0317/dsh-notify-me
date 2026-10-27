@@ -3072,6 +3072,31 @@ function deniedPermissionFeedback() {
   s.cleanup();
 }
 
+async function vanishedBaselinesPruned() {
+  console.log('\n— baselines for vanished rows are bounded —');
+  const b = bootBundle({ withNotification: true });
+  const host = buildHost({ withSessionStatus: true });
+  b.mod.apply(host.ctx);
+  b.win.__dshNotifyMe.onEvent = () => {};
+  const base = b.win.__dshNotifyMe.debug().sessionBaselines;
+  host.setList({ ids: ['gone'], byId: { gone: { running: false, displayTitle: '临时会话', retainedBy: {} } }, phase: 'ready' });
+  host.notifyList();
+  assert(b.win.__dshNotifyMe.debug().sessionBaselines === base + 1, 'the row seeds one baseline');
+  // A short absence keeps the baseline: the row may come back.
+  host.setList({ ids: [], byId: {}, phase: 'ready' });
+  host.notifyList();
+  assert(b.win.__dshNotifyMe.debug().sessionBaselines === base + 1,
+    'a row missing from one update keeps its baseline');
+  // Forty-plus updates without it and the baseline is dropped.
+  for (let i = 0; i < 45; i++) {
+    host.setList({ ids: [], byId: {}, phase: 'ready' });
+    host.notifyList();
+  }
+  assert(b.win.__dshNotifyMe.debug().sessionBaselines === 0,
+    'a row gone for 40+ updates drops its baseline, got ' + b.win.__dshNotifyMe.debug().sessionBaselines);
+  for (const c of [...host.cleanups]) c();
+}
+
 function storageFailureFeedback() {
   console.log('\n— a refused config write is reported instead of looking saved —');
   const s = settingsBoot(null, null, {
@@ -3155,6 +3180,7 @@ async function approvalTestToastSurvivesMark() {
   storageFailureFeedback();
   permissionReask();
   await approvalTestToastSurvivesMark();
+  await vanishedBaselinesPruned();
   await listChangeDerivation();
   await awayWithoutHiding();
   await awayWhileFocusedAndIdle();

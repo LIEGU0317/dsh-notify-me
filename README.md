@@ -310,7 +310,7 @@ Windows 的激活顺序是实的：已经在前台就什么都不做（最常见
 
 安全上只开一条 exact 路由。词表之外的请求一律拒：非 GET / HEAD / POST 回 `405`（包括预检的 `OPTIONS`，且从不回任何 CORS 头），非 Windows 宿主（Web 版、macOS / Linux、纯 Node）回 `501`（macOS / Linux 走深链，不经过这条路由），缺 `x-dsh-notify-me-focus: focus` 头回 `403`。
 
-那个头只是「这是页面发来的」标记，不是防线——DNS rebinding 的恶意页对目标地址而言是同源的，能带任意自定义头、也不触发预检。真正的闸门是三层：对端地址必须是 loopback；`Host` 必须是 loopback 名（`127.0.0.1` / `localhost` / `[::1]`，可带端口），因为壳转发时 `host` 已被删掉、由 fetch 按 loopback URL 重填，而 rebinding 的页面 Host 仍是攻击者域名；带了 `Origin` 就必须和 `Host` 同源。任一条不符回 `403`，`reason` 分别是 `bad-remote` / `bad-host` / `cross-origin`。`GET` 只回 `{ok, route, enabled, desktop, platform}`，装完可以先用浏览器打开确认路由在不在。400 毫秒内的重复调用合并成一次，脚本超过 8 秒没回话就 kill 掉按失败处理。
+那个头只是「这是页面发来的」标记，不是防线——DNS rebinding 的恶意页对目标地址而言是同源的，能带任意自定义头、也不触发预检。真正的闸门是三层：对端地址必须是 loopback，或恰好是监听器自己绑定的那个 IP；`Host` 必须是 loopback 名（`127.0.0.1` / `localhost` / `[::1]`，可带端口）或同一个绑定地址，因为壳转发时 `host` 已被删掉、由 fetch 按它拨号的 URL 重填，而 rebinding 的页面 Host 仍是攻击者域名；带了 `Origin` 就必须和 `Host` 同源。任一条不符回 `403`，`reason` 分别是 `bad-remote` / `bad-host` / `cross-origin`。`GET` 只回 `{ok, route, enabled, desktop, platform}`，装完可以先用浏览器打开确认路由在不在。400 毫秒内的重复调用合并成一次，脚本超过 8 秒没回话就 kill 掉按失败处理。
 
 抬不起来的几种场合与[已知限制](#已知限制)里列的一致（提权窗口、另一虚拟桌面、前台被反复抢走、`SW_HIDE` 托盘隐藏），一律如实回 `202`、对话照常切。
 

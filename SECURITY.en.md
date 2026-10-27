@@ -18,7 +18,7 @@ Only the latest published release (currently 1.14.x) is accepted. For older buil
 
 - Alerts contain the session label, the first 160 characters of a pending approval or question, and the first 80 characters of a reply. By default they are presented locally only: OS notification, sound, tab title.
 - When external push is enabled, that text is sent to endpoints the user configured; URLs and secrets are stored in browser local storage. The plugin runs no backend service, collects no usage data, and forwards nothing to other third parties.
-- When a desktop notification is clicked, on Windows the host runs PowerShell to raise the window; on macOS / Linux the page fires the `dsh://open` deep link and the host is not involved. The host route accepts a loopback peer and a loopback `Host` only; when an `Origin` is present it must match that `Host`, and a dedicated request header is required.
+- When a desktop notification is clicked, on Windows the host runs PowerShell to raise the window; on macOS / Linux the page fires the `dsh://open` deep link and the host is not involved. The host route accepts a loopback peer and a loopback `Host`, or the exact address the listener itself is bound to; when an `Origin` is present it must match that `Host`, and a dedicated request header is required.
 
 ## In scope
 

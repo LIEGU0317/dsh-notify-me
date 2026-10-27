@@ -2,6 +2,23 @@
 
 All notable changes to **dsh-notify-me** are documented here.
 
+## [1.14.6] — 2026-10-27
+
+### 修复
+
+- **监听器只绑一个具体局域网 IP 时，桌面端点通知不再抬不起窗**：抬窗路由的闸门只认 loopback 对端与 `Host`，而 `webServer` 可以被配置成只绑一块网卡；那种情况下壳按绑定地址拨号，请求的对端和 `Host` 都是那个 IP，被 `403 bad-remote` / `bad-host` 挡掉。现在闸门额外接受「恰好是监听器自己绑定的那个 IP」（`webServer.host`）作对端与 `Host`；局域网里别的机器连过来源地址不是这个 IP，照旧拒绝。
+- **会话基线不再随子代理会话一直涨**：`prevById` 在会话首次出现时新增，消失后永远保留。长开的页面上子代理会话来来去去，`debug().sessionBaselines` 只增不减。现在连续 40 次列表更新都缺席的行会丢掉基线（顺带清掉 `doneFiredAt`）；短暂消失仍保留，不影响「消失再出现不补报」的语义。
+
+### 测试
+
+- `host-route-test.mjs` 用 `webServer.host = 192.168.1.5` 的假宿主补了四条：本机自拨的绑定地址放行、局域网别处的客户端 `bad-remote`、自拨但 `Host` 是别的域名 `bad-host`、跨源 `Origin` 照旧拒绝。
+- 冒烟新增 `vanishedBaselinesPruned()`：短暂缺席保留基线，连续 40+ 次更新后清零。
+
+### 文档
+
+- README / SECURITY 中英的闸门说明补上「或监听器自己绑定的那个 IP」。
+- `docs/listing.md` 版本口径同步到 1.14.6。
+
 ## [1.14.5] — 2026-10-27
 
 ### 修复

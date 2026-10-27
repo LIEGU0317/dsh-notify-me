@@ -31,6 +31,10 @@ const ctx = {
     cb({
       effect(fn) { fn(); return () => {}; },
       webServer: {
+        // A listener bound to one concrete LAN interface: the host half reads
+        // this so the gate can accept the self-addressed request the shell
+        // makes in that setup.
+        host: '192.168.1.5',
         register(route) {
           routes.push(route);
           return () => { const i = routes.indexOf(route); if (i !== -1) routes.splice(i, 1); };
@@ -115,6 +119,37 @@ const wrongPort = await callRoute({
 });
 assert(wrongPort.status === 403 && wrongPort.body && wrongPort.body.reason === 'cross-origin',
   'an Origin on another port counts as cross-origin (got ' + wrongPort.status + ' ' + JSON.stringify(wrongPort.body) + ')');
+// A listener bound to a concrete LAN interface: the shell dials that address,
+// so the peer and Host are the bind IP. A remote client's peer never is.
+const bindSelf = await callRoute({
+  method: 'POST',
+  remoteAddress: '192.168.1.5',
+  headers: Object.assign({ host: '192.168.1.5:3080', origin: 'http://192.168.1.5:3080' }, required),
+});
+assert(bindSelf.status === 501,
+  'a self-addressed bind address passes the gate, got ' + bindSelf.status + ' ' + JSON.stringify(bindSelf.body));
+const bindForeignPeer = await callRoute({
+  method: 'POST',
+  remoteAddress: '192.168.1.50',
+  headers: Object.assign({ host: '192.168.1.5:3080' }, required),
+});
+assert(bindForeignPeer.status === 403 && bindForeignPeer.body && bindForeignPeer.body.reason === 'bad-remote',
+  'a LAN client cannot borrow the bind address (got ' + bindForeignPeer.status + ' ' + JSON.stringify(bindForeignPeer.body) + ')');
+const bindForeignHost = await callRoute({
+  method: 'POST',
+  remoteAddress: '192.168.1.5',
+  headers: Object.assign({ host: 'evil.example' }, required),
+});
+assert(bindForeignHost.status === 403 && bindForeignHost.body && bindForeignHost.body.reason === 'bad-host',
+  'a self-addressed peer with a foreign Host is still refused (got ' + bindForeignHost.status + ')');
+const bindCrossOrigin = await callRoute({
+  method: 'POST',
+  remoteAddress: '192.168.1.5',
+  headers: Object.assign({ host: '192.168.1.5:3080', origin: 'http://evil.example' }, required),
+});
+assert(bindCrossOrigin.status === 403 && bindCrossOrigin.body && bindCrossOrigin.body.reason === 'cross-origin',
+  'a cross-site Origin is refused on the bind path too (got ' + bindCrossOrigin.status + ')');
+
 const preflight = await callRoute({
   method: 'OPTIONS',
   headers: { host: 'evil.example', origin: 'http://evil.example' },

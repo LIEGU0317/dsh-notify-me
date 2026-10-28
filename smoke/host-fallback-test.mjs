@@ -11,8 +11,9 @@
 //
 // What is pinned here: the lease gate on both event kinds, release and expiry,
 // `pageLeaseMs: 0`, language following the heartbeat, approval dedupe, the
-// per-session throttle, the subagent skip, the prompt/title that make a body
-// useful, the reason suffix, one credential retry on 401, and the health probe.
+// per-session throttle, the subagent skip, the session title that names a body,
+// the copy that must match the page's toast verbatim, the reason suffix, one
+// credential retry on 401, and the health probe.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -172,7 +173,6 @@ const baseConfig = (over) => ({
       events: ['turn/end', 'approval/asked'],
       includeSubagents: false,
       turnEndThrottleMs: 15000,
-      maxChars: 300,
       titlePrefix: 'DSH',
       language: 'auto',
       pageLeaseMs: 400,
@@ -198,13 +198,13 @@ try {
   }
 
   // 2) `alive:false` hands delivery back immediately, not when the lease would
-  // have expired, and the body quotes the prompt and names the session.
+  // have expired, and the body is the session name — exactly what the page's own
+  // toast shows for the same event.
   {
     const calls = captureFetch();
     const hostHalf = bootHost(baseConfig());
     await hostHalf.beat(JSON.stringify({ alive: true }));
     await hostHalf.beat(JSON.stringify({ alive: false }));
-    hostHalf.emit(ALPHA, { type: 'user/message', data: { role: 'user', content: [{ type: 'text', text: 'look at' }, { type: 'text', text: 'the diff' }] } });
     hostHalf.emit(ALPHA, { type: 'turn/end', data: { turn: 2, reason: { kind: 'completed' } } });
     await waitFor(() => calls.length === 1, 'the released lease to let a turn alert through');
     const call = calls[0];
@@ -213,7 +213,7 @@ try {
     assert(call.headers.authorization === basic('alice', 'old'), 'the credentials file supplies Basic auth, got ' + call.headers.authorization);
     const payload = JSON.parse(call.body);
     assert(payload.title === 'DSH · 回复完成', 'the turn title is the Chinese copy, got ' + JSON.stringify(payload.title));
-    assert(payload.body === 'atlas\n你刚才问：look at the diff', 'the body names the session and quotes the prompt, got ' + JSON.stringify(payload.body));
+    assert(payload.body === 'atlas', 'the body is the session name alone, got ' + JSON.stringify(payload.body));
     assert(payload.type === 'info', 'a finished turn is an info alert, got ' + payload.type);
     globalThis.fetch = realFetch;
   }
@@ -227,9 +227,9 @@ try {
     hostHalf.emit(ALPHA, { type: 'approval/asked', data: { id: 'ap-2', toolName: 'shell', reason: 'runs rm -rf on the workspace' } });
     await waitFor(() => calls.length === 1, 'an approval on a never-alive lease');
     const cjk = JSON.parse(calls[0].body);
-    assert(cjk.title === 'DSH · 需要你操作', 'the approval title is the Chinese copy, got ' + JSON.stringify(cjk.title));
-    assert(cjk.body === 'Parser rewrite · 审批请求：shell（runs rm -rf on the workspace）',
-      'the approval body names the session, the tool and the reason, got ' + JSON.stringify(cjk.body));
+    assert(cjk.title === 'DSH · 审批请求', 'the approval title uses the page label, got ' + JSON.stringify(cjk.title));
+    assert(cjk.body === 'Parser rewrite：shell · runs rm -rf on the workspace',
+      'the approval body mirrors the page toast (session, colon, tool, reason), got ' + JSON.stringify(cjk.body));
     assert(cjk.type === 'warning', 'an approval is a warning alert, got ' + cjk.type);
 
     calls.length = 0;
@@ -238,8 +238,8 @@ try {
     hostHalf.emit(ALPHA, { type: 'approval/asked', data: { id: 'ap-3', toolName: 'write' } });
     await waitFor(() => calls.length === 1, 'an approval after an English heartbeat');
     const english = JSON.parse(calls[0].body);
-    assert(english.title === 'DSH · Needs you', 'the title follows the heartbeat language, got ' + JSON.stringify(english.title));
-    assert(english.body === 'Parser rewrite · Approval: write', 'the body follows it too, got ' + JSON.stringify(english.body));
+    assert(english.title === 'DSH · Approval request', 'the title follows the heartbeat language, got ' + JSON.stringify(english.title));
+    assert(english.body === 'Parser rewrite: write', 'the body follows it too, got ' + JSON.stringify(english.body));
     globalThis.fetch = realFetch;
   }
 
@@ -355,8 +355,8 @@ try {
     globalThis.fetch = realFetch;
   }
 
-  // 11) The reason a turn ended is appended, except for the normal one, and a
-  // turn with no recorded prompt falls back to the session name alone.
+  // 11) The reason a turn ended is appended, except for the normal one; the
+  // body itself stays the session name.
   {
     const calls = captureFetch();
     const hostHalf = bootHost(baseConfig({ turnEndThrottleMs: 0 }));
@@ -370,6 +370,31 @@ try {
     hostHalf.emit(ALPHA, { type: 'turn/end', data: { turn: 11, reason: 'aborted' } });
     await waitFor(() => calls.length === 3, 'a turn with a legacy string reason');
     assert(JSON.parse(calls[2].body).body === 'atlas（aborted）', 'a string reason is honoured too');
+    globalThis.fetch = realFetch;
+  }
+
+  // 11b) A user message carries injected blocks in this deployment
+  // (`<system-reminder>`, memory context, timestamp lines). Nothing from the
+  // conversation belongs in an external push: the alert must stay the session
+  // name, or the gateway shows the user a wall of harness internals.
+  {
+    const calls = captureFetch();
+    const hostHalf = bootHost(baseConfig({ turnEndThrottleMs: 0 }));
+    hostHalf.emit(ALPHA, {
+      type: 'user/message',
+      data: [
+        { type: 'text', text: '<system-reminder> A skill is available: …' },
+        { type: 'text', text: '<openviking-context> Relevant memory … </openviking-context>' },
+        { type: 'text', text: 'Time sampled while preparing turn 3, step 20: 2026-10-28T16:11:09+08:00' },
+      ],
+    });
+    hostHalf.emit(ALPHA, { type: 'turn/end', data: { turn: 3, reason: { kind: 'completed' } } });
+    await waitFor(() => calls.length === 1, 'a turn after an injected user message');
+    const payload = JSON.parse(calls[0].body);
+    assert(payload.body === 'atlas', 'the body is the session name only, got ' + JSON.stringify(payload.body));
+    for (const marker of ['你刚才问', 'You asked', 'system-reminder', 'openviking-context', 'Time sampled']) {
+      assert(payload.body.indexOf(marker) === -1, 'the payload must not quote ' + marker + ', got ' + JSON.stringify(payload.body));
+    }
     globalThis.fetch = realFetch;
   }
 
@@ -441,13 +466,12 @@ try {
   {
     const calls = captureFetch();
     const disposed = bootHost(baseConfig());
-    disposed.emit(ALPHA, { type: 'user/message', data: { role: 'user', content: 'first question' } });
     disposed.emit(ALPHA, { type: 'session/title', data: { title: 'Atlas work' } });
     disposed.disposed(ALPHA);
     disposed.emit(ALPHA, { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
     await waitFor(() => calls.length === 1, 'a turn after the session was disposed');
     assert(JSON.parse(calls[0].body).body === 'atlas',
-      'the disposal dropped both the prompt and the title, got ' + JSON.stringify(JSON.parse(calls[0].body).body));
+      'the disposal dropped the cached title, got ' + JSON.stringify(JSON.parse(calls[0].body).body));
     globalThis.fetch = realFetch;
 
     const noTarget = bootHost({ hostFallback: { enabled: true, credentialsFile: credFile } });
@@ -477,7 +501,7 @@ try {
     globalThis.fetch = realFetch;
   }
 
-  console.log('host fallback OK: lease gate, dedupe, throttle, subagent skip, language, retry, probe');
+  console.log('host fallback OK: lease gate, dedupe, throttle, subagent skip, language, page-parity copy, retry, probe');
 } finally {
   globalThis.fetch = realFetch;
   fs.rmSync(tempDir, { recursive: true, force: true });

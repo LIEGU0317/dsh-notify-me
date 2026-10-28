@@ -197,7 +197,6 @@ profile 覆盖示例（`~/.dsh/profiles/<profile>/cordis.patch.yml`）。**`conf
       events: ['turn/end', 'approval/asked']
       includeSubagents: false
       turnEndThrottleMs: 15000
-      maxChars: 300
       titlePrefix: 'DSH'
       language: 'auto'            # auto | zh | en
       pageLeaseMs: 60000          # 0 = 不与页面协调（页面开着也会重复）
@@ -216,8 +215,8 @@ profile 覆盖示例（`~/.dsh/profiles/<profile>/cordis.patch.yml`）。**`conf
 - `events`（`['turn/end', 'approval/asked']`）：要推的事件，只列一种就只有那一种；
 - `includeSubagents`（`false`）：`origin === 'subagent'` 的会话默认跳过，理由与页面侧一致——它们是主对话一轮里的步骤；
 - `turnEndThrottleMs`（`15000`）：同一会话的「回复完成」在这个窗口内只推一条；窗口只在真发出去时才消耗，被租约挡掉的那次不算；
-- `maxChars`（`300`）：正文里「你刚才问：…」引用的上一句提问长度；
-- `titlePrefix`（`DSH`）：标题是 `<前缀> · 需要你操作` / `<前缀> · 回复完成`；
+- **文案与页面通知逐字一致**：标题是 `<前缀> · 回复完成` / `<前缀> · 审批请求`，正文「回复完成」只有会话名、「审批请求」是 `会话名：工具名 · 原因`——不含任何用户消息正文（用户消息里常带注入的 `<system-reminder>`、记忆上下文与时间戳，复制进通知就没法读了）；非正常收尾（`aborted` / `error` / `max-tokens`…）会在正文尾部附一个短后缀，如 `（error）`；
+- `titlePrefix`（`DSH`）：标题是 `<前缀> · 审批请求` / `<前缀> · 回复完成`（与页面通知同一套标签）；
 - `language`（`auto`）：`auto` 用页面最近一次心跳报的语言，没有心跳才回落到中文；`zh` / `en` 强制；
 - `pageLeaseMs`（`60000`）：页面在线租约，见下面「去重」；
 - `healthPath`（`/__dsh-notify-me/host-fallback`）：只读健康探针的路径。

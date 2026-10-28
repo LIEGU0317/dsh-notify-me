@@ -197,7 +197,6 @@ An override example for the profile (`~/.dsh/profiles/<profile>/cordis.patch.yml
       events: ['turn/end', 'approval/asked']
       includeSubagents: false
       turnEndThrottleMs: 15000
-      maxChars: 300
       titlePrefix: 'DSH'
       language: 'auto'            # auto | zh | en
       pageLeaseMs: 60000          # 0 = no coordination with the page (duplicates while it is open)
@@ -216,8 +215,8 @@ Key by key (defaults in parentheses):
 - `events` (`['turn/end', 'approval/asked']`): the events to push; listing one gives you only that one;
 - `includeSubagents` (`false`): sessions with `origin === 'subagent'` are skipped by default, for the same reason as on the page side — they are steps inside the parent conversation's turn;
 - `turnEndThrottleMs` (`15000`): one "reply finished" per session inside that window; the window is only spent when an alert actually went out, so one held off by the lease does not consume it;
-- `maxChars` (`300`): how much of the previous prompt is quoted back as "You asked: …";
-- `titlePrefix` (`DSH`): titles read `<prefix> · Needs you` / `<prefix> · Reply finished`;
+- **The copy matches the page's own toast verbatim**: the title is `<prefix> · Reply finished` / `<prefix> · Approval request`, the body is the session name for a finished turn and `session: tool · reason` for an approval — never any of the user message text (a user message often carries injected `<system-reminder>` blocks, memory context and timestamps, which make a notification unreadable); an abnormal end (`aborted` / `error` / `max-tokens`, …) appends a short parenthetical such as ` (error)`;
+- `titlePrefix` (`DSH`): titles read `<prefix> · Approval request` / `<prefix> · Reply finished` (the page's own labels);
 - `language` (`auto`): `auto` follows the language of the page's last heartbeat and only falls back to Chinese with no heartbeat at all; `zh` / `en` force one;
 - `pageLeaseMs` (`60000`): the page's online lease, see "deduplication" below;
 - `healthPath` (`/__dsh-notify-me/host-fallback`): the path of the read-only health probe.

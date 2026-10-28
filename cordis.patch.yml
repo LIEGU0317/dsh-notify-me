@@ -67,7 +67,6 @@
           events: ['turn/end', 'approval/asked']
           includeSubagents: false
           turnEndThrottleMs: 15000
-          maxChars: 300
           titlePrefix: 'DSH'
           language: 'auto'      # auto | zh | en
           pageLeaseMs: 60000    # 0 = no coordination with the page (duplicates while it is open)

@@ -8,7 +8,7 @@ All notable changes to **dsh-notify-me** are documented here.
 
 ### 新增
 
-- **页面关闭后的宿主侧兜底**（`lib/host-fallback.js`，默认关）：订阅宿主的 `session/event`，页面不在时继续把「需要你操作」「回复完成」发往配置的网关。审批按 id 去重（每会话缓存上限 500）、`turn/end` 每会话按 `turnEndThrottleMs`（默认 15000 ms）节流、子代理会话默认跳过、`language: 'auto'` 时跟随页面心跳报告的语言；`turn/end` 的 `reason` 按对象 `{kind}` 读取，`completed` 之外的收尾会把 kind 附在正文；`session/disposed` 用独立事件清缓存（它不是会话日志项）。
+- **页面关闭后的宿主侧兜底**（`lib/host-fallback.js`，默认关）：订阅宿主的 `session/event`，页面不在时继续把「审批请求」「回复完成」发往配置的网关——**文案与页面通知逐字一致**（标题 `<前缀> · 审批请求` / `<前缀> · 回复完成`；正文「回复完成」只有会话名、审批是 `会话名：工具名 · 原因`），不含任何用户消息正文，因此不会把注入的 `<system-reminder>` / 记忆上下文 / 时间戳带进通知。审批按 id 去重（每会话缓存上限 500）、`turn/end` 每会话按 `turnEndThrottleMs`（默认 15000 ms）节流、子代理会话默认跳过、`language: 'auto'` 时跟随页面心跳报告的语言；`turn/end` 的 `reason` 按对象 `{kind}` 读取，`completed` 之外的收尾会把 kind 附在正文；`session/disposed` 用独立事件清缓存（它不是会话日志项）。
 - **同源中继**（`lib/relay.js`，默认关）：`<relay.path>` 上 `GET` / `HEAD` 是只读探针，`POST` 把页面载荷映射为网关的 `{title, body, type:'info'}`（不透传 `tag`——Apprise 把未匹配的 tag 当 424）、由宿主补上凭据与 `gateway.headers` 转发，回 `200 {ok, upstreamStatus, upstreamBody}`（`upstreamBody` 上限 500 字符）；上游非 2xx 回 `502`，凭据文件配了但读不出来回 `503`，上游异常回 `502 {reason:'upstream-error'}`。启用需要绝对路径与可达的 `relay.target`，否则不注册路由，只在日志里留一行 warning。
 - **页面在线租约**（`lib/page-bridge.js` 的 `createPresence`）：页面 `GET` 探测 `/__dsh-notify-me/host-bridge`，只在 `hostFallback.enabled` 为真时心跳（间隔 `leaseMs/3`，夹在 5–20 秒），`pagehide` 发 `{alive:false}` 立刻释放；租约默认 60000 ms，`pageLeaseMs: 0` 关闭协调（页面开着也会重复，仅调试用）。心跳 body 只承载 `{alive, language}`：语言让宿主文案跟着页面走，页面自己的推送开关与可见性判定不进宿主（规则是「没有页面持有租约时宿主接手」，只照做一半会得到谁也算不清的规则）。
 - **共享请求闸门泛化**（`lib/page-bridge.js` 的 `gateRequest`）：从抬窗路由迁出并新增「由 `allowedOrigins` 派生的公网 `Host`」一档，供隧道 / 反代下的页面入口使用；不传 `allowedOrigins` 的抬窗路由行为与旧版一致。宿主兜底与中继的宿主入口不再各自实现一份闸门。

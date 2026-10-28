@@ -13,6 +13,9 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/page-bridge.js",
+    "lib/host-fallback.js",
+    "lib/relay.js",
     "lib/focus-window.ps1",
     "cordis.patch.yml",
     "README.md",
@@ -66,7 +69,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node smoke/smoke-test.cjs && node smoke/host-route-test.mjs && node smoke/cordis-host-test.mjs",
+    "test": "node smoke/smoke-test.cjs && node smoke/host-route-test.mjs && node smoke/page-bridge-test.mjs && node smoke/host-fallback-test.mjs && node smoke/relay-route-test.mjs && node smoke/cordis-host-test.mjs",
     "pack": "npm pack --dry-run"
   },
   "publishConfig": {

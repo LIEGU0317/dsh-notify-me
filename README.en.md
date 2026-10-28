@@ -248,6 +248,8 @@ Enabling it takes `relay.enabled: true`, an absolute `relay.path`, `relay.target
 
 How to use it: **Settings → Notify me → Advanced → External push** gains two read-only rows, and the "Same-origin relay" one shows `Enabled · address: <origin><relay.path>`; paste that absolute address into the URL of a **custom webhook** target on the same page, and the page never has to know the credentials.
 
+You do not have to change the address either: **a "custom webhook" target that names the relay's own upstream gateway is folded onto the relay route when it is sent.** Such an address cannot work from a browser (the three CORS facts above block it, and the `no-cors` fallback is a *cross-site* POST that Apprise answers `403 Cross-site request rejected`), and older builds recorded that as `unverified` — the settings row read "last delivery sent-unverified" and the test button reported "sent-unverified", **while the phone stayed silent**. Folded, the request stays same-origin and the host adds the credential, so the verdict is the gateway's real status. Folding happens only when the target is of type "custom" *and* its URL's host equals `relay.upstreamHost`; every other host is posted exactly as configured (the relay only delivers to its own gateway), and the settings page prints a note under any target that will be folded.
+
 Behind a tunnel or reverse proxy the relay passes the same `Host` gate as the bridge route: put the page's public origin in the top-level `allowedOrigins`, or both the probe and the `POST` are refused as `bad-host`.
 
 What comes back (which is how the page turns "sent but unverifiable" into something checkable):

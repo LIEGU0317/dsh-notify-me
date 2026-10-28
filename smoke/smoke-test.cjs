@@ -2415,6 +2415,73 @@ async function externalWebhooks() {
   const d1 = armed.win.__dshNotifyMe.debug().external;
   assert(d1.sent === 2 && d1.targets === 2 && d1.activeTargets === 2, 'debug tallies the sends');
 
+  // 3b) a custom target naming the relay's own upstream gateway is folded onto
+  //     the same-origin relay route. Straight at that gateway the browser has
+  //     no reachable verdict at all (Basic auth -> a preflight the gateway
+  //     answers without Access-Control-Allow-*; the opaque fallback -> a
+  //     cross-site POST the gateway refuses), which is how a lost alert used to
+  //     read as "sent, unconfirmed" while the phone stayed silent.
+  const GATEWAY = 'https://gateway.example';
+  const RELAY = '/__notify-relay/testtoken';
+  const relayProbe = (rec) => rec.opts.method === 'GET' && rec.url === HOST_BRIDGE_ROUTE;
+  const bridgeAnswer = (relay) => ({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ ok: true, hostFallback: { enabled: false, leaseMs: 60000 }, relay: relay }),
+  });
+  const RELAY_ON = { enabled: true, path: RELAY, upstreamHost: 'gateway.example' };
+  const RELAY_OFF = { enabled: false, path: null, upstreamHost: null };
+  const folded = bootWeb((rec) => {
+    if (relayProbe(rec)) return bridgeAnswer(RELAY_ON);
+    return { ok: true, status: 200, text: () => Promise.resolve('{"ok":true,"upstreamStatus":200}') };
+  }, { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: GATEWAY + '/notify/KEY' }] });
+  await flush();
+  folded.calls.length = 0;
+  const rFold = await folded.win.__dshNotifyMe.testExternal();
+  assert(rFold.sent === 1 && rFold.unverified === 0 && rFold.failed === 0,
+    'a folded gateway target reports a real sent, got ' + JSON.stringify(rFold));
+  assert(folded.calls.length === 1, 'one POST for the folded target, got ' + folded.calls.length);
+  assert(folded.calls[0].url === RELAY,
+    'the folded target is posted to the same-origin relay path, got ' + folded.calls[0].url);
+  assert(folded.calls[0].opts.mode !== 'no-cors', 'the folded request is not an opaque one');
+  const foldBody = JSON.parse(folded.calls[0].body);
+  assert(foldBody.source === 'dsh-notify-me' && foldBody.title === '外部通知测试' && typeof foldBody.body === 'string',
+    'the folded payload keeps the custom shape and the copy, got ' + JSON.stringify(foldBody));
+  const foldHealth = folded.win.__dshNotifyMe.debug().external.health.t1;
+  assert(foldHealth && foldHealth.status === 'sent',
+    'the folded delivery is recorded as sent, got ' + JSON.stringify(foldHealth));
+
+  // 3c) a target on another host is never folded: the relay forwards to its own
+  //     gateway and nowhere else, so folding would deliver to the wrong place.
+  const elsewhere = bootWeb((rec) => {
+    if (relayProbe(rec)) return bridgeAnswer(RELAY_ON);
+    return { ok: true, status: 204 };
+  }, { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://other.example/x' }] });
+  await flush();
+  elsewhere.calls.length = 0;
+  await elsewhere.win.__dshNotifyMe.testExternal();
+  assert(elsewhere.calls.length === 1 && elsewhere.calls[0].url === 'https://other.example/x',
+    'a target on another host keeps its own address, got ' + JSON.stringify(elsewhere.calls.map((c) => c.url)));
+
+  // 3d) without an enabled relay there is nothing to fold onto: the target is
+  //     posted as configured, and the opaque fallback is reported as unverified
+  //     *with its reason* — the settings row has to say which of the two it was.
+  const opaque = bootWeb((rec) => {
+    if (relayProbe(rec)) return bridgeAnswer(RELAY_OFF);
+    if (rec.opts.mode === 'no-cors') return { ok: false, status: 0 };
+    throw new TypeError('Failed to fetch');
+  }, { externalEnabled: true, externalTargets: [{ id: 't1', type: 'custom', url: 'https://cross.example/x' }] });
+  await flush();
+  opaque.calls.length = 0;
+  const rOpaque = await opaque.win.__dshNotifyMe.testExternal();
+  assert(rOpaque.unverified === 1 && rOpaque.sent === 0,
+    'a refused CORS exchange lands on unverified, got ' + JSON.stringify(rOpaque));
+  assert(opaque.calls[opaque.calls.length - 1].url === 'https://cross.example/x',
+    'an unfolded target is posted to its own address, got ' + opaque.calls[opaque.calls.length - 1].url);
+  const opaqueHealth = opaque.win.__dshNotifyMe.debug().external.health.t1;
+  assert(opaqueHealth && opaqueHealth.status === 'unverified' && opaqueHealth.reason === 'opaque',
+    'the unverified verdict carries its reason, got ' + JSON.stringify(opaqueHealth));
+
   // 4) real alerts mirror through fire(); the per-kind toggles gate only them.
   armed.calls.length = 0;
   const host = armed.host;
@@ -2877,7 +2944,7 @@ async function hostBridgeLease() {
     json: () => Promise.resolve({
       ok: true,
       hostFallback: { enabled: false, leaseMs: 60000 },
-      relay: { enabled: true, path: '/__dsh-notify-me/relay/def456' },
+      relay: { enabled: true, path: '/__dsh-notify-me/relay/def456', upstreamHost: 'gateway.example' },
     }),
   }));
   await flush();
@@ -2889,6 +2956,10 @@ async function hostBridgeLease() {
   assert(relayDbg.relayEnabled === true && relayDbg.relayPath === '/__dsh-notify-me/relay/def456',
     'the relay path survives an disabled hostFallback, got ' + JSON.stringify(relayDbg));
   assert(relayDbg.leaseMs === null, 'no lease is reported without a fallback, got ' + relayDbg.leaseMs);
+  // The relay's upstream gateway host travels with the path: the page needs it
+  // to recognise a target that names that same gateway.
+  assert(relayDbg.relayUpstreamHost === 'gateway.example',
+    'the probe publishes the relay upstream host, got ' + JSON.stringify(relayDbg.relayUpstreamHost));
 
   // 4) pagehide: one keepalive release, then silence — the host must take over
   //    at once instead of waiting out the lease.
@@ -2963,7 +3034,7 @@ async function hostBridgeLease() {
     'becoming visible probes once right away, got ' + (probes(vis.calls).length - probesBefore));
 
   // 6) the debug block keeps its shape in every state.
-  const SHAPE = 'lastBeaconAt,lastProbeAt,lastReason,leaseMs,relayEnabled,relayPath,state';
+  const SHAPE = 'lastBeaconAt,lastProbeAt,lastReason,leaseMs,relayEnabled,relayPath,relayUpstreamHost,state';
   for (const shape of [yes.api.debug().hostBridge, nope.api.debug().hostBridge, off.api.debug().hostBridge, relayOnly.api.debug().hostBridge, denied.api.debug().hostBridge]) {
     assert(Object.keys(shape).sort().join(',') === SHAPE,
       'hostBridge debug keys are stable, got ' + Object.keys(shape).sort().join(','));
